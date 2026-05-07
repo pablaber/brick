@@ -1,0 +1,16 @@
+{
+  "name": "@workout/web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsc --watch --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "echo \"No tests yet for @workout/web\""
+  },
+  "dependencies": {
+    "@workout/shared": "workspace:*"
+  }
+}
