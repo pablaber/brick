@@ -26,19 +26,19 @@ Primary directories:
 
 ## Web App (apps/web)
 
-Implemented in this phase:
-
-- SvelteKit + TypeScript scaffold.
+- SvelteKit + TypeScript (Svelte 5 runes mode).
 - Cloudflare adapter enabled in `svelte.config.js`.
-- Tailwind loaded via Vite plugin and route-level stylesheet import.
+- Tailwind v4 loaded via Vite plugin and route-level stylesheet import.
+- ESLint configured via `apps/web/eslint.config.js` with `eslint-plugin-svelte`.
 - Shared app shell and nav in `src/routes/+layout.svelte`.
 - Shared styles in `src/routes/layout.css`.
-- Initial routes/pages:
+- Routes/pages:
   - `src/routes/+page.svelte`
   - `src/routes/dashboard/+page.svelte`
   - `src/routes/settings/+page.svelte`
   - `src/routes/auth/login/+page.svelte`
 - Dashboard data is mock/placeholder only.
+- Navigation links use `resolve()` from `$app/paths` for base path safety.
 
 ## Local Commands
 
@@ -48,7 +48,12 @@ From repo root:
 - Web dev server: `pnpm --filter web dev`
 - Web checks: `pnpm --filter web check`
 - All workspace dev: `pnpm dev`
+- All workspace build: `pnpm build`
 - All workspace checks: `pnpm check`
+- All workspace lint: `pnpm lint`
+- Format check: `pnpm format`
+- Format fix: `pnpm format:write`
+- Generate DB types: `pnpm db:types`
 
 ## Implementation Constraints
 
