@@ -68,9 +68,6 @@ create index strava_connections_athlete_id_idx
 create index activities_user_start_date_idx
   on public.activities (user_id, start_date desc);
 
-create index activities_user_sport_type_idx
-  on public.activities (user_id, sport_type);
-
 create index activities_user_sport_type_start_date_idx
   on public.activities (user_id, sport_type, start_date desc);
 
