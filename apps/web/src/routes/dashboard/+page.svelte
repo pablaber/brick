@@ -37,7 +37,7 @@
 		<article class="card">
 			<h3>Recent Activities</h3>
 			<ul class="list">
-				{#each recentActivities as activity}
+				{#each recentActivities as activity (activity.summary)}
 					<li class="list-item">
 						<div>
 							<strong>{activity.summary}</strong>
@@ -52,7 +52,7 @@
 		<article class="card">
 			<h3>Sport Breakdown</h3>
 			<ul class="list">
-				{#each sportBreakdown as item}
+				{#each sportBreakdown as item (item.sport)}
 					<li class="list-item">
 						<span>{item.sport}</span>
 						<strong>{item.pct}%</strong>
