@@ -1,40 +1,50 @@
 # Workout Dashboard Monorepo
 
-This repository is a TypeScript `pnpm` workspace powered by Turborepo.
+This repository is a `pnpm` + Turborepo monorepo for the workout tracking platform.
 
 ## Architecture
 
-- `apps/web`: Future frontend dashboard application.
-- `workers/strava`: Future background worker for Strava ingest/sync jobs.
-- `packages/shared`: Shared TypeScript types, utilities, and domain contracts.
-- `supabase/migrations`: SQL migrations for Supabase schema changes.
+- `apps/web`: SvelteKit frontend dashboard (Phase 2 baseline).
+- `workers/strava`: Worker service for future Strava ingest/sync jobs.
+- `packages/shared`: Shared TypeScript types and utilities.
+- `supabase/migrations`: SQL migrations for future Supabase schema changes.
 
-## Tooling Foundation
+## Phase 2 (Current) Web App
 
-- `pnpm` workspaces for package management.
-- Turborepo task orchestration and caching.
-- Shared TypeScript base config in `tsconfig.base.json`.
-- Shared ESLint flat config in `eslint.config.mjs`.
-- Shared Prettier config in `.prettierrc.json`.
+The `apps/web` package now includes:
+
+- SvelteKit (TypeScript).
+- Cloudflare deployment adapter (`@sveltejs/adapter-cloudflare`).
+- Tailwind CSS setup.
+- Shared responsive layout and top navigation.
+- Initial routes:
+  - `/`
+  - `/dashboard`
+  - `/settings`
+  - `/auth/login`
+- Mock dashboard cards only (no Supabase or Strava integration yet):
+  - Weekly minutes
+  - Yearly running miles
+  - Recent activities
+  - Sport breakdown
 
 ## Scripts
 
 Run from repo root:
 
+- `pnpm install`: Install workspace dependencies.
 - `pnpm dev`: Run all workspace `dev` scripts in parallel.
-- `pnpm build`: Build all workspaces.
-- `pnpm check`: Run TypeScript checks (`tsc --noEmit`) across workspaces.
-- `pnpm lint`: Run ESLint across workspaces.
-- `pnpm test`: Run placeholder test scripts across workspaces.
-- `pnpm format`: Check formatting with Prettier.
-- `pnpm format:write`: Apply formatting with Prettier.
+- `pnpm --filter web dev`: Run the SvelteKit app only.
+- `pnpm build`: Run workspace builds through Turborepo.
+- `pnpm check`: Run workspace type/sanity checks.
+- `pnpm lint`: Run workspace lint tasks.
+- `pnpm test`: Run workspace test tasks.
 
 ## Getting Started
 
 ```bash
 pnpm install
-pnpm lint
-pnpm check
+pnpm --filter web dev
 ```
 
-This baseline intentionally contains no app features yet; it only establishes the monorepo foundation.
+Then open the app locally and visit `/dashboard` to see the mock stats UI.
