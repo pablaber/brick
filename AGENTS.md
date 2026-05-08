@@ -13,9 +13,9 @@ Guidance for coding agents working in this monorepo.
 
 Primary directories:
 
-- `apps/web`: SvelteKit frontend app.
+- `apps/web`: SvelteKit frontend app with Supabase Auth.
 - `workers/strava`: Worker code.
-- `packages/shared`: Shared TypeScript package.
+- `packages/shared`: Shared TypeScript package (includes generated database types).
 - `supabase/migrations`: Database migrations.
 
 ## Branching and Diffs
@@ -30,15 +30,28 @@ Primary directories:
 - Cloudflare adapter enabled in `svelte.config.js`.
 - Tailwind v4 loaded via Vite plugin and route-level stylesheet import.
 - ESLint configured via `apps/web/eslint.config.js` with `eslint-plugin-svelte`.
-- Shared app shell and nav in `src/routes/+layout.svelte`.
+- Supabase Auth via `@supabase/ssr` with server-side session handling.
+- Shared app shell and auth-aware nav in `src/routes/+layout.svelte`.
 - Shared styles in `src/routes/layout.css`.
 - Routes/pages:
-  - `src/routes/+page.svelte`
-  - `src/routes/dashboard/+page.svelte`
-  - `src/routes/settings/+page.svelte`
-  - `src/routes/auth/login/+page.svelte`
+  - `src/routes/+page.svelte` — public home page.
+  - `src/routes/auth/login/+page.svelte` — login/signup with form actions.
+  - `src/routes/auth/logout/+server.ts` — POST endpoint for sign-out.
+  - `src/routes/dashboard/+page.svelte` — protected, mock stats.
+  - `src/routes/settings/+page.svelte` — protected, account info.
+- Server-side files:
+  - `src/hooks.server.ts` — creates Supabase client, attaches auth helpers to `event.locals`.
+  - `src/routes/+layout.server.ts` — returns auth state to client layout.
+  - `src/routes/auth/login/+page.server.ts` — login/signup form actions.
+  - `src/routes/dashboard/+page.server.ts` — route protection via `requireUser`.
+  - `src/routes/settings/+page.server.ts` — route protection, profile and Strava connection data.
+- Auth helpers:
+  - `src/lib/server/auth.ts` — `requireUser()` for protected routes.
+  - `src/lib/server/profiles.ts` — `ensureProfile()` upserts a profiles row.
+  - `src/lib/supabase.ts` — browser client factory (minimal, for future use).
 - Dashboard data is mock/placeholder only.
 - Navigation links use `resolve()` from `$app/paths` for base path safety.
+- Environment variables: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` via `$env/dynamic/public`.
 
 ## Local Commands
 
@@ -54,13 +67,16 @@ From repo root:
 - Format check: `pnpm format`
 - Format fix: `pnpm format:write`
 - Generate DB types: `pnpm db:types`
+- Start local Supabase: `npx supabase start`
+- Reset local DB: `npx supabase db reset`
 
 ## Implementation Constraints
 
-- Do not add Supabase or Strava integration logic in the current dashboard phase.
-- Keep `/dashboard` renderable with mock data.
+- Keep `/dashboard` renderable with mock data until real Strava data is available.
 - Preserve Cloudflare adapter setup for web deploy target.
 - Keep UI responsive for desktop and mobile.
+- No Strava OAuth or sync logic yet.
+- No service role key in the SvelteKit app (only the public anon key).
 
 ## Agent Collaboration Notes
 
@@ -68,6 +84,7 @@ From repo root:
 - Prefer editing existing route/layout files over introducing new framework layers.
 - If adding shared UI primitives later, place them under `apps/web/src/lib`.
 - Keep documentation updated when route structure or scripts change.
+- Auth-related helpers live in `apps/web/src/lib/server/`.
 
 ## PR Instructions
 
