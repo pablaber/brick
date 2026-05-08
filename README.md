@@ -39,6 +39,7 @@ Run from repo root:
 - `pnpm check`: Run workspace type/sanity checks.
 - `pnpm lint`: Run workspace lint tasks.
 - `pnpm test`: Run workspace test tasks.
+- `pnpm db:types`: Generate local Supabase TypeScript types to `packages/shared/src/database.types.ts`.
 
 ## Getting Started
 
@@ -48,3 +49,7 @@ pnpm --filter web dev
 ```
 
 Then open the app locally and visit `/dashboard` to see the mock stats UI.
+
+## Supabase (Phase 3)
+
+Supabase local development setup and schema docs are in `supabase/README.md`.
