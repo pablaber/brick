@@ -1,0 +1,2 @@
+-- Intentionally empty for Phase 3.
+-- Add local-only development seed rows here in future phases.
