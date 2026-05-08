@@ -9,19 +9,16 @@ This repository is a `pnpm` + Turborepo monorepo for the workout tracking platfo
 - `packages/shared`: Shared TypeScript types and utilities.
 - `supabase/migrations`: SQL migrations for future Supabase schema changes.
 
-## Phase 2 (Current) Web App
+## Web App (`apps/web`)
 
-The `apps/web` package now includes:
+SvelteKit frontend dashboard with:
 
-- SvelteKit (TypeScript).
+- SvelteKit (TypeScript, Svelte 5 runes mode).
 - Cloudflare deployment adapter (`@sveltejs/adapter-cloudflare`).
-- Tailwind CSS setup.
+- Tailwind CSS v4 via Vite plugin.
+- ESLint with `eslint-plugin-svelte`.
 - Shared responsive layout and top navigation.
-- Initial routes:
-  - `/`
-  - `/dashboard`
-  - `/settings`
-  - `/auth/login`
+- Routes: `/`, `/dashboard`, `/settings`, `/auth/login`.
 - Mock dashboard cards only (no Supabase or Strava integration yet):
   - Weekly minutes
   - Yearly running miles
@@ -35,11 +32,13 @@ Run from repo root:
 - `pnpm install`: Install workspace dependencies.
 - `pnpm dev`: Run all workspace `dev` scripts in parallel.
 - `pnpm --filter web dev`: Run the SvelteKit app only.
-- `pnpm build`: Run workspace builds through Turborepo.
-- `pnpm check`: Run workspace type/sanity checks.
-- `pnpm lint`: Run workspace lint tasks.
+- `pnpm build`: Build all workspaces through Turborepo.
+- `pnpm check`: Typecheck all workspaces (includes `wrangler types` + `svelte-check` for web).
+- `pnpm lint`: Lint all workspaces (ESLint + `eslint-plugin-svelte` for web).
 - `pnpm test`: Run workspace test tasks.
-- `pnpm db:types`: Generate local Supabase TypeScript types to `packages/shared/src/database.types.ts`.
+- `pnpm format`: Check formatting with Prettier.
+- `pnpm format:write`: Auto-fix formatting.
+- `pnpm db:types`: Generate Supabase TypeScript types to `packages/shared/src/database.types.ts`.
 
 ## Getting Started
 
@@ -50,6 +49,9 @@ pnpm --filter web dev
 
 Then open the app locally and visit `/dashboard` to see the mock stats UI.
 
-## Supabase (Phase 3)
+## Supabase
 
-Supabase local development setup and schema docs are in `supabase/README.md`.
+Local development setup and schema docs are in `supabase/README.md`.
+
+Tables: `profiles`, `strava_connections`, `activities`, `sync_runs`.
+Views: `weekly_activity_minutes`, `monthly_distance_by_sport`, `yearly_running_distance`, `weekly_sport_breakdown`.

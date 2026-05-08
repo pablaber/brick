@@ -2,10 +2,11 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 
 	let { children } = $props();
 
-	const navItems = [
+	const navItems: { href: '/' | '/dashboard' | '/settings' | '/auth/login'; label: string }[] = [
 		{ href: '/', label: 'Home' },
 		{ href: '/dashboard', label: 'Dashboard' },
 		{ href: '/settings', label: 'Settings' },
@@ -29,10 +30,13 @@
 <div class="app-shell">
 	<header class="topbar">
 		<div class="container topbar-inner">
-			<a class="brand" href="/">Lyon Workout</a>
+			<a class="brand" href={resolve('/')}>Lyon Workout</a>
 			<nav class="nav" aria-label="Primary">
-				{#each navItems as item}
-					<a class={`nav-link ${isActive(item.href) ? 'active' : ''}`} href={item.href}>{item.label}</a>
+				{#each navItems as item (item.href)}
+					<a
+						class={`nav-link ${isActive(item.href) ? 'active' : ''}`}
+						href={resolve(item.href)}>{item.label}</a
+					>
 				{/each}
 			</nav>
 		</div>

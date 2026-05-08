@@ -2,3 +2,5 @@ node_modules
 pnpm-lock.yaml
 .turbo
 dist
+.svelte-kit
+worker-configuration.d.ts
