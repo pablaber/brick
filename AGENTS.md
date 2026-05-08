@@ -63,3 +63,17 @@ From repo root:
 - Prefer editing existing route/layout files over introducing new framework layers.
 - If adding shared UI primitives later, place them under `apps/web/src/lib`.
 - Keep documentation updated when route structure or scripts change.
+
+## PR Instructions
+
+Each PR should include a clear description and a manual testing checklist.
+
+- Description section:
+  - Include a `## Description` heading.
+  - Summarize what changed and why.
+  - Cover all meaningful changes in the branch diff, not just the latest commit.
+- Manual testing section:
+  - Include a `## Manual Testing` heading.
+  - Provide concrete, reproducible steps to validate behavior.
+  - Include expected results for each step so reviewers can confirm correctness.
+  - Prefer route-level and command-level checks for app changes (for example `pnpm --filter web check`, `pnpm --filter web dev`, and validating key routes in the browser).
