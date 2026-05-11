@@ -1,8 +1,6 @@
-# Strava Worker (Phase 6 Skeleton)
+# Strava Worker (Phase 7 OAuth)
 
-This Cloudflare Worker provides the foundation for future Strava OAuth, sync, and webhook flows.
-
-Current routes are placeholders only.
+This Cloudflare Worker handles the Strava OAuth connection flow and stores Strava tokens server-side in Supabase.
 
 ## Run locally
 
@@ -16,11 +14,11 @@ pnpm --filter @workout/strava-worker dev
 
 The worker runs with Wrangler on `http://localhost:8787`.
 
-## Routes (placeholder responses)
+## Routes
 
 - `GET /health`
-- `GET /strava/connect`
-- `GET /strava/callback`
+- `GET /strava/connect?token=<signed-token>`
+- `GET /strava/callback?code=...&state=...`
 - `POST /sync/manual`
 
 Local dev endpoint URLs:
@@ -42,7 +40,7 @@ Unhandled errors return JSON `500`:
 { "ok": false, "error": "Internal server error" }
 ```
 
-## Environment variables (for later phases)
+## Environment variables
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -52,9 +50,36 @@ Unhandled errors return JSON `500`:
 - `APP_URL`
 - `WORKER_SHARED_SECRET`
 
-Non-goals in this phase:
+## OAuth flow summary
 
-- no real Strava OAuth
-- no Strava API calls
-- no Supabase writes
+1. Web app starts OAuth via `POST /strava/connect` server route.
+2. Web app signs a short-lived connect token with `WORKER_SHARED_SECRET`.
+3. Worker validates token on `GET /strava/connect`.
+4. Worker creates `oauth_states` row with 10 minute expiration.
+5. Worker redirects to Strava OAuth authorize URL with `state`.
+6. Strava calls back to `GET /strava/callback`.
+7. Worker validates `state` (exists, not expired, not used).
+8. Worker exchanges `code` for tokens with Strava.
+9. Worker upserts `strava_connections` and marks `oauth_states.used_at`.
+10. Worker redirects to `APP_URL/settings?strava=connected` (or safe error status).
+
+## Local manual test
+
+1. Start web app and worker:
+
+```bash
+pnpm --filter web dev
+pnpm --filter @workout/strava-worker dev
+```
+
+2. Log in at `http://localhost:5173`.
+3. Open `http://localhost:5173/settings`.
+4. Click `Connect Strava`.
+5. Complete Strava auth and confirm redirect to settings.
+
+## Non-goals in this phase
+
+- no activity sync
+- no activity fetching
+- no token refresh beyond initial token storage
 - no scheduled sync/webhooks

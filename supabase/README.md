@@ -36,6 +36,7 @@ This writes generated types to `packages/shared/src/database.types.ts`.
 
 - `public.profiles`: app-level profile row per authenticated user.
 - `public.strava_connections`: Strava OAuth/token metadata per user (readable by user, writable later via service role).
+- `public.oauth_states`: short-lived OAuth state records created/consumed by trusted server-side code.
 - `public.activities`: normalized synced Strava activities.
 - `public.sync_runs`: history of manual/scheduled sync attempts.
 
