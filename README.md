@@ -4,10 +4,10 @@ This repository is a `pnpm` + Turborepo monorepo for the workout tracking platfo
 
 ## Architecture
 
-- `apps/web`: SvelteKit frontend dashboard (Phase 2 baseline).
+- `apps/web`: SvelteKit frontend dashboard with Supabase Auth.
 - `workers/strava`: Worker service for future Strava ingest/sync jobs.
-- `packages/shared`: Shared TypeScript types and utilities.
-- `supabase/migrations`: SQL migrations for future Supabase schema changes.
+- `packages/shared`: Shared TypeScript types and utilities (including generated database types).
+- `supabase/migrations`: SQL migrations for the Supabase schema.
 
 ## Web App (`apps/web`)
 
@@ -16,10 +16,21 @@ SvelteKit frontend dashboard with:
 - SvelteKit (TypeScript, Svelte 5 runes mode).
 - Cloudflare deployment adapter (`@sveltejs/adapter-cloudflare`).
 - Tailwind CSS v4 via Vite plugin.
+- Supabase Auth (email/password signup and login via `@supabase/ssr`).
 - ESLint with `eslint-plugin-svelte`.
-- Shared responsive layout and top navigation.
-- Routes: `/`, `/dashboard`, `/settings`, `/auth/login`.
-- Mock dashboard cards only (no Supabase or Strava integration yet):
+- Shared responsive layout and auth-aware top navigation.
+- Routes:
+  - `/` — public home page.
+  - `/auth/login` — login and signup form.
+  - `/auth/logout` — POST endpoint to sign out.
+  - `/dashboard` — protected, shows mock dashboard cards.
+  - `/settings` — protected, shows account info and Strava connection status.
+- Auth features:
+  - Server-side session management via `hooks.server.ts`.
+  - Protected routes redirect unauthenticated users to `/auth/login`.
+  - Profile row auto-created on first login/signup.
+  - Auth-aware nav (shows Dashboard/Settings/Log out when logged in, Home/Log in when logged out).
+- Mock dashboard cards only (no Strava integration yet):
   - Weekly minutes
   - Yearly running miles
   - Recent activities
@@ -44,10 +55,33 @@ Run from repo root:
 
 ```bash
 pnpm install
+```
+
+### Local Supabase
+
+Start local Supabase and get credentials:
+
+```bash
+npx supabase start
+npx supabase status
+```
+
+Copy the API URL and `anon key` from `supabase status` output into `apps/web/.env.local`:
+
+```bash
+PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-status>
+```
+
+See `apps/web/.env.example` for a template.
+
+### Run the app
+
+```bash
 pnpm --filter web dev
 ```
 
-Then open the app locally and visit `/dashboard` to see the mock stats UI.
+Then open the app locally. Sign up at `/auth/login`, then visit `/dashboard` to see the mock stats UI.
 
 ## Supabase
 

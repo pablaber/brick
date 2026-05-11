@@ -235,3 +235,45 @@ a {
 .primary-button:hover {
   background: var(--brand-strong);
 }
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-error {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: #fff0f0;
+  color: #c41e3a;
+  font-size: 0.92rem;
+  border: 1px solid #ffd6d6;
+}
+
+.form-toggle {
+  margin: 0.75rem 0 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--brand);
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: 600;
+  padding: 0;
+}
+
+.link-button:hover {
+  color: var(--brand-strong);
+  text-decoration: underline;
+}
+
+.nav-button {
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}

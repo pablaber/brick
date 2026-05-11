@@ -6,18 +6,10 @@
 
 	let { children } = $props();
 
-	const navItems: { href: '/' | '/dashboard' | '/settings' | '/auth/login'; label: string }[] = [
-		{ href: '/', label: 'Home' },
-		{ href: '/dashboard', label: 'Dashboard' },
-		{ href: '/settings', label: 'Settings' },
-		{ href: '/auth/login', label: 'Login' }
-	];
+	const user = $derived(page.data.user);
 
 	const isActive = (href: string) => {
-		if (href === '/') {
-			return page.url.pathname === '/';
-		}
-
+		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname.startsWith(href);
 	};
 </script>
@@ -32,12 +24,25 @@
 		<div class="container topbar-inner">
 			<a class="brand" href={resolve('/')}>Lyon Workout</a>
 			<nav class="nav" aria-label="Primary">
-				{#each navItems as item (item.href)}
+				{#if user}
 					<a
-						class={`nav-link ${isActive(item.href) ? 'active' : ''}`}
-						href={resolve(item.href)}>{item.label}</a
+						class={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}
+						href={resolve('/dashboard')}>Dashboard</a
 					>
-				{/each}
+					<a
+						class={`nav-link ${isActive('/settings') ? 'active' : ''}`}
+						href={resolve('/settings')}>Settings</a
+					>
+					<form method="POST" action={resolve('/auth/logout')} style="display:contents">
+						<button class="nav-link nav-button" type="submit">Log out</button>
+					</form>
+				{:else}
+					<a class={`nav-link ${isActive('/') ? 'active' : ''}`} href={resolve('/')}>Home</a>
+					<a
+						class={`nav-link ${isActive('/auth/login') ? 'active' : ''}`}
+						href={resolve('/auth/login')}>Log in</a
+					>
+				{/if}
 			</nav>
 		</div>
 	</header>
