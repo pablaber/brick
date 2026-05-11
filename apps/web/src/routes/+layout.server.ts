@@ -1,9 +1,9 @@
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
-  const session = await locals.getSession();
+  const user = await locals.getUser();
 
   return {
-    user: session?.user ? { id: session.user.id, email: session.user.email ?? null } : null
+    user: user ? { id: user.id, email: user.email ?? null } : null
   };
 };

@@ -1,7 +1,59 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
 
 	let { data } = $props();
+	let isSyncing = $state(false);
+	let syncProgressFetched = $state(0);
+	let syncProgressTotal = $state<number | null>(null);
+	let syncProgressMessage = $state<string | null>(null);
+	let syncProgressPercent = $state(0);
+
+	let syncDetailsOpen = $state(false);
+
+	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+	let toastDismissing = $state(false);
+
+	function showToast(message: string, type: 'success' | 'error') {
+		toast = { message, type };
+		toastDismissing = false;
+		setTimeout(() => {
+			toastDismissing = true;
+			setTimeout(() => {
+				toast = null;
+				toastDismissing = false;
+			}, 400);
+		}, 4000);
+	}
+
+	function dismissToast() {
+		toastDismissing = true;
+		setTimeout(() => {
+			toast = null;
+			toastDismissing = false;
+		}, 400);
+	}
+
+	onMount(() => {
+		const url = new URL(window.location.href);
+		let dirty = false;
+
+		if (data.stravaResult && stravaResultMessage[data.stravaResult]) {
+			showToast(stravaResultMessage[data.stravaResult], data.stravaResult === 'connected' ? 'success' : 'error');
+			url.searchParams.delete('strava');
+			dirty = true;
+		}
+
+		if (data.syncResult && syncResultMessage[data.syncResult]) {
+			showToast(syncResultMessage[data.syncResult], data.syncResult === 'success' ? 'success' : 'error');
+			url.searchParams.delete('sync');
+			dirty = true;
+		}
+
+		if (dirty) {
+			window.history.replaceState({}, '', url.toString());
+		}
+	});
 
 	const stravaResultMessage: Record<string, string> = {
 		connected: 'Strava connected successfully.',
@@ -9,6 +61,122 @@
 		invalid_state: 'Invalid or expired Strava authorization state. Please try again.',
 		error: 'Unable to connect Strava right now. Please try again.'
 	};
+
+	const syncResultMessage: Record<string, string> = {
+		success: 'Manual sync completed successfully.',
+		error: 'Manual sync failed. Please try again.',
+		running: 'A manual sync is already running.',
+		not_connected: 'Connect Strava before running a manual sync.'
+	};
+
+	type ManualSyncResponse = {
+		ok?: boolean;
+		error?: string;
+		syncRunId?: string;
+		batchActivitiesFetched?: number;
+		totalActivitiesFetched?: number;
+		hasMore?: boolean;
+		nextCursorBefore?: number | null;
+		estimatedTotalActivities?: number | null;
+	};
+
+	function formatDate(raw: string | null | undefined): { date: string; time: string } | null {
+		if (!raw) return null;
+		const d = new Date(raw);
+		if (isNaN(d.getTime())) return null;
+
+		const day = d.getDate();
+		const suffix =
+			day % 10 === 1 && day !== 11
+				? 'st'
+				: day % 10 === 2 && day !== 12
+					? 'nd'
+					: day % 10 === 3 && day !== 13
+						? 'rd'
+						: 'th';
+		const month = d.toLocaleDateString('en-US', { month: 'long' });
+		const year = d.getFullYear();
+		const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
+
+		return { date: `${month} ${day}${suffix}, ${year}`, time };
+	}
+
+	async function onSyncSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		if (isSyncing) {
+			return;
+		}
+
+		isSyncing = true;
+		syncProgressFetched = 0;
+		syncProgressTotal = null;
+		syncProgressPercent = 0;
+		syncProgressMessage = 'Checking Strava activities…';
+
+		let cursorBefore: number | undefined = undefined;
+		let syncRunId: string | undefined = undefined;
+		let estimatedTotalActivities: number | undefined = undefined;
+
+		try {
+			while (true) {
+				const response = await fetch(resolve('/sync/manual'), {
+					method: 'POST',
+					headers: {
+						accept: 'application/json',
+						'content-type': 'application/json'
+					},
+					body: JSON.stringify({
+						cursorBefore,
+						syncRunId,
+						estimatedTotalActivities
+					})
+				});
+				const body = (await response.json()) as ManualSyncResponse;
+
+				if (!response.ok || !body.ok) {
+					const syncStatus =
+						response.status === 409 ? 'running' : response.status === 400 ? 'not_connected' : 'error';
+					window.location.assign(`/settings?sync=${syncStatus}`);
+					return;
+				}
+
+				syncProgressFetched = body.totalActivitiesFetched ?? syncProgressFetched;
+				if (body.estimatedTotalActivities != null) {
+					estimatedTotalActivities = body.estimatedTotalActivities;
+				}
+				syncProgressTotal =
+					estimatedTotalActivities != null
+						? Math.max(estimatedTotalActivities, syncProgressFetched)
+						: null;
+
+				if (syncProgressTotal && syncProgressTotal > 0) {
+					syncProgressPercent = Math.max(0, Math.min(100, Math.round((syncProgressFetched / syncProgressTotal) * 100)));
+				}
+
+				if (!body.hasMore) {
+					syncProgressPercent = 100;
+					syncProgressMessage = `Checked ${syncProgressFetched} activities`;
+					window.location.assign('/settings?sync=success');
+					return;
+				}
+
+				syncProgressMessage = syncProgressTotal
+					? `Checked ${syncProgressFetched} of ~${syncProgressTotal} activities`
+					: `Checked ${syncProgressFetched} activities`;
+
+				if (!body.nextCursorBefore || !body.syncRunId) {
+					window.location.assign('/settings?sync=error');
+					return;
+				}
+
+				cursorBefore = body.nextCursorBefore;
+				syncRunId = body.syncRunId;
+			}
+		} catch (error) {
+			console.error('Manual sync client request failed.', error);
+			window.location.assign('/settings?sync=error');
+		}
+	}
 </script>
 
 <section class="page">
@@ -17,8 +185,10 @@
 		<p class="page-subtitle">Account and connection settings.</p>
 	</header>
 
-	<div class="card">
-		<h2>Account</h2>
+	<div class="card card-sectioned">
+		<div class="card-heading">
+			<h2>Account</h2>
+		</div>
 		<ul class="list">
 			<li class="list-item">
 				<span>Email</span>
@@ -31,39 +201,452 @@
 		</ul>
 	</div>
 
-	<div class="card">
-		<h2>Strava</h2>
-		{#if data.stravaResult}
-			<p class={`note ${data.stravaResult === 'connected' ? 'note-success' : 'note-error'}`}>
-				{stravaResultMessage[data.stravaResult]}
-			</p>
-		{/if}
-
-		<p class="metric-caption">
-			{data.strava.connected ? 'Connected to Strava' : 'Not connected yet'}
-		</p>
-
+	<div class="card card-sectioned">
+		<div class="card-heading">
+			<h2>Strava</h2>
+			{#if data.strava.connected}
+				<span class="status-bubble status-success heading-status">Connected</span>
+			{/if}
+		</div>
 		{#if data.strava.connected}
 			<ul class="list">
 				<li class="list-item">
 					<span>Strava Athlete ID</span>
-					<strong>{data.strava.strava_athlete_id}</strong>
+					<strong>
+						<a
+							href={`https://www.strava.com/athletes/${data.strava.strava_athlete_id}`}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="strava-link"
+						>
+							{data.strava.strava_athlete_id}
+						</a>
+					</strong>
 				</li>
 				<li class="list-item">
 					<span>Scope</span>
 					<strong>{data.strava.scope ?? 'Not provided'}</strong>
 				</li>
-				<li class="list-item">
-					<span>Last Synced</span>
-					<strong>{data.strava.last_synced_at ?? 'Never'}</strong>
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<li
+					class="list-item"
+					class:list-item-clickable={!!data.latestSyncRun}
+					role={data.latestSyncRun ? 'button' : undefined}
+					tabindex={data.latestSyncRun ? 0 : undefined}
+					onclick={() => { if (data.latestSyncRun) syncDetailsOpen = !syncDetailsOpen; }}
+					onkeydown={(e) => { if (data.latestSyncRun && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); syncDetailsOpen = !syncDetailsOpen; } }}
+				>
+					<span class="last-synced-label">
+						Last Synced
+						{#if data.latestSyncRun}
+							<span class="expand-hint">{syncDetailsOpen ? 'Hide details' : 'Show details'}</span>
+						{/if}
+					</span>
+					<span class="last-synced-value">
+						{#if data.latestSyncRun}
+							<span
+								class="status-bubble status-inline"
+								class:status-success={data.latestSyncRun.status === 'success'}
+								class:status-error={data.latestSyncRun.status === 'failed'}
+								class:status-running={data.latestSyncRun.status === 'running' || data.latestSyncRun.status === 'in_progress'}
+							>
+								{data.latestSyncRun.status}
+							</span>
+						{/if}
+						{#if formatDate(data.strava.last_synced_at)}
+							<span class="date-display">
+								<span class="date-label">{formatDate(data.strava.last_synced_at)?.date}</span>
+								<span class="date-time">{formatDate(data.strava.last_synced_at)?.time}</span>
+							</span>
+						{:else}
+							<strong>Never</strong>
+						{/if}
+					</span>
 				</li>
 			</ul>
-		{/if}
 
-		<form method="POST" action={resolve('/strava/connect')}>
-			<button type="submit" class="primary-button">
-				{data.strava.connected ? 'Reconnect Strava' : 'Connect Strava'}
-			</button>
-		</form>
+			{#if data.latestSyncRun && syncDetailsOpen}
+				<ul class="list sync-details">
+					<li class="list-item">
+						<span>Started At</span>
+						{#if formatDate(data.latestSyncRun.started_at)}
+							<span class="date-display">
+								<span class="date-label">{formatDate(data.latestSyncRun.started_at)?.date}</span>
+								<span class="date-time">{formatDate(data.latestSyncRun.started_at)?.time}</span>
+							</span>
+						{:else}
+							<strong>{data.latestSyncRun.started_at}</strong>
+						{/if}
+					</li>
+					<li class="list-item">
+						<span>Completed At</span>
+						{#if formatDate(data.latestSyncRun.completed_at)}
+							<span class="date-display">
+								<span class="date-label">{formatDate(data.latestSyncRun.completed_at)?.date}</span>
+								<span class="date-time">{formatDate(data.latestSyncRun.completed_at)?.time}</span>
+							</span>
+						{:else}
+							<strong>In progress</strong>
+						{/if}
+					</li>
+					<li class="list-item">
+						<span>Activities Checked</span>
+						<strong>{data.latestSyncRun.activities_fetched ?? '0'}</strong>
+					</li>
+					{#if data.latestSyncRun.error}
+						<li class="list-item">
+							<span>Latest Sync Error</span>
+							<strong>{data.latestSyncRun.error}</strong>
+						</li>
+					{/if}
+				</ul>
+			{/if}
+
+			<div class="card-subheading">Actions</div>
+			<div class="strava-actions">
+				<div class="strava-actions-row">
+					<form method="POST" action={resolve('/sync/manual')} onsubmit={onSyncSubmit}>
+						<button type="submit" class="primary-button" disabled={isSyncing}>
+							{isSyncing ? 'Syncing now…' : 'Sync now'}
+						</button>
+					</form>
+					<form method="POST" action={resolve('/strava/connect')}>
+						<button type="submit" class="destructive-button" disabled={isSyncing}>
+							Reconnect Strava
+						</button>
+					</form>
+				</div>
+				{#if isSyncing}
+					<div class="sync-progress" role="status" aria-live="polite">
+						<div class="progress-bar-track">
+							<div class="progress-bar-fill" style:width={`${syncProgressPercent}%`}></div>
+						</div>
+						<p class="sync-loading">{syncProgressMessage ?? 'Sync in progress. Please wait…'}</p>
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="strava-disconnected">
+				<p class="metric-caption">Not connected yet</p>
+				<p class="metric-caption">
+					Connect Strava first. Manual sync is available once the account is connected.
+				</p>
+				<form method="POST" action={resolve('/strava/connect')}>
+					<button type="submit" class="primary-button">Connect Strava</button>
+				</form>
+			</div>
+		{/if}
 	</div>
 </section>
+
+{#if toast}
+	<div class="toast-container" class:toast-dismissing={toastDismissing}>
+		<div class="toast" class:toast-success={toast.type === 'success'} class:toast-error={toast.type === 'error'}>
+			<span>{toast.message}</span>
+			<button class="toast-close" onclick={dismissToast} aria-label="Dismiss">&times;</button>
+		</div>
+	</div>
+{/if}
+
+<style>
+	.card-sectioned {
+		padding: 0;
+		overflow: hidden;
+	}
+
+	.card-sectioned > :not(.card-heading) {
+		padding: 0 1rem;
+	}
+
+	.card-heading + * {
+		margin-top: 0.75rem;
+	}
+
+	.card-sectioned > .card-heading:not(:first-child) {
+		margin-top: 0.5rem;
+	}
+
+	.card-subheading {
+		margin-top: 0.75rem;
+		margin-bottom: 0.75rem;
+		padding: 0.5rem 1rem;
+		background: var(--surface-subtle);
+		border-top: 1px solid var(--line);
+		border-bottom: 1px solid var(--line);
+		font-size: 0.78rem;
+		font-weight: 600;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	.card-sectioned > :last-child {
+		padding-bottom: 1rem;
+	}
+
+	.card-heading {
+		background: var(--surface-subtle);
+		border-bottom: 1px solid var(--line);
+		padding: 0.65rem 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.card-heading h2 {
+		margin: 0;
+		font-size: 0.85rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	.heading-status {
+		font-size: 0.75rem;
+		padding: 0.15rem 0.5rem;
+	}
+
+	.list-item-clickable {
+		cursor: pointer;
+		transition: background 120ms ease-in-out;
+	}
+
+	.list-item-clickable:hover {
+		background: var(--surface-subtle);
+	}
+
+	.last-synced-label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+
+	.expand-hint {
+		font-size: 0.75rem;
+		color: var(--brand);
+		font-weight: 500;
+	}
+
+	.last-synced-value {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.status-inline {
+		font-size: 0.75rem;
+		padding: 0.15rem 0.45rem;
+	}
+
+	.card-sectioned > .sync-details {
+		margin-top: 0.25rem;
+		border-top: 1px solid var(--line);
+		background: var(--surface-subtle);
+		padding: 0.6rem 1rem 1rem;
+	}
+
+	.sync-details + .card-subheading {
+		margin-top: 0;
+	}
+
+	.strava-disconnected {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.strava-disconnected .metric-caption {
+		margin: 0;
+	}
+
+	.card-sectioned > .list + .list {
+		margin-top: 0.4rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--line);
+	}
+
+	.strava-actions {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.strava-actions-row {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.destructive-button {
+		border: 1px solid #e0b4b4;
+		border-radius: 0.6rem;
+		padding: 0.65rem 0.8rem;
+		font-weight: 600;
+		color: #a73131;
+		background: #fff0f0;
+		cursor: pointer;
+	}
+
+	.destructive-button:hover {
+		background: #ffe0e0;
+		border-color: #d49a9a;
+	}
+
+	.destructive-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.sync-loading {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--text-muted);
+	}
+
+	.sync-progress {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.progress-bar-track {
+		width: 100%;
+		height: 0.6rem;
+		background: var(--surface-subtle);
+		border-radius: 999px;
+		overflow: hidden;
+		border: 1px solid var(--line);
+	}
+
+	.progress-bar-fill {
+		height: 100%;
+		border-radius: 999px;
+		background: linear-gradient(90deg, var(--brand) 0%, var(--brand-strong) 100%);
+		transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	.strava-link {
+		color: var(--brand);
+		text-decoration: none;
+	}
+
+	.strava-link:hover {
+		color: var(--brand-strong);
+		text-decoration: underline;
+	}
+
+	.date-display {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.1rem;
+	}
+
+	.date-label {
+		font-weight: 500;
+	}
+
+	.date-time {
+		font-size: 0.82rem;
+		color: var(--text-muted);
+		font-weight: 400;
+	}
+
+	.status-bubble {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		font-size: 0.82rem;
+		font-weight: 600;
+		text-transform: capitalize;
+	}
+
+	.status-success {
+		background: #e9fff4;
+		color: var(--ok);
+	}
+
+	.status-error {
+		background: #fff0f0;
+		color: #a73131;
+	}
+
+	.status-running {
+		background: #e9f2ff;
+		color: var(--brand-strong);
+	}
+
+	.toast-container {
+		position: fixed;
+		bottom: 1.5rem;
+		right: 1.5rem;
+		z-index: 100;
+		animation: toast-in 0.35s ease-out;
+	}
+
+	.toast-container.toast-dismissing {
+		animation: toast-out 0.4s ease-in forwards;
+	}
+
+	.toast {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.75rem;
+		font-size: 0.92rem;
+		font-weight: 500;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+	}
+
+	.toast-success {
+		background: #e9fff4;
+		color: var(--ok);
+		border: 1px solid #b6ecd2;
+	}
+
+	.toast-error {
+		background: #fff0f0;
+		color: #a73131;
+		border: 1px solid #ffd6d6;
+	}
+
+	.toast-close {
+		background: none;
+		border: none;
+		font-size: 1.2rem;
+		line-height: 1;
+		cursor: pointer;
+		color: inherit;
+		opacity: 0.6;
+		padding: 0;
+	}
+
+	.toast-close:hover {
+		opacity: 1;
+	}
+
+	@keyframes toast-in {
+		from {
+			opacity: 0;
+			transform: translateY(1rem);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes toast-out {
+		from {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		to {
+			opacity: 0;
+			transform: translateY(1rem);
+		}
+	}
+</style>

@@ -5,7 +5,7 @@ This repository is a `pnpm` + Turborepo monorepo for the workout tracking platfo
 ## Architecture
 
 - `apps/web`: SvelteKit frontend dashboard with Supabase Auth.
-- `workers/strava`: Cloudflare Worker for Strava OAuth connection flow (sync/webhooks come later).
+- `workers/strava`: Cloudflare Worker for Strava OAuth connection flow and manual activity sync.
 - `packages/shared`: Shared TypeScript types and utilities (including generated database types).
 - `supabase/migrations`: SQL migrations for the Supabase schema.
 
@@ -25,6 +25,7 @@ SvelteKit frontend dashboard with:
   - `/auth/logout` — POST endpoint to sign out.
   - `/dashboard` — protected, shows mock dashboard cards.
   - `/settings` — protected, shows account info and Strava connection status.
+  - `/sync/manual` — protected POST endpoint that triggers secure server-side manual sync.
 - Auth features:
   - Server-side session management via `hooks.server.ts`.
   - Protected routes redirect unauthenticated users to `/auth/login`.
@@ -49,6 +50,7 @@ Run from repo root:
 - `pnpm test`: Run workspace test tasks.
 - `pnpm format`: Check formatting with Prettier.
 - `pnpm format:write`: Auto-fix formatting.
+- `pnpm db:reset`: Reset the local Supabase database and re-run migrations.
 - `pnpm db:types`: Generate Supabase TypeScript types to `packages/shared/src/database.types.ts`.
 
 ## Getting Started
@@ -88,7 +90,7 @@ Then open the app locally. Sign up at `/auth/login`, then visit `/dashboard` to 
 - Site: http://localhost:5173
 - Supabase Dashboard (Studio): http://127.0.0.1:54323
 
-## Phase 7: Strava OAuth Setup
+## Phase 7/8: Strava OAuth + Manual Sync Setup
 
 ### 1) Strava API app setup
 
@@ -160,9 +162,46 @@ Then open:
 8. Confirm `strava_connections` has a row for the user in Supabase.
 9. Confirm access/refresh tokens are not exposed in browser-rendered settings data.
 
+### 6) Manual sync verification checklist
+
+1. Ensure Strava is connected for the logged-in user.
+2. Open `/settings`.
+3. Click `Sync now`.
+4. Confirm redirect back to `/settings?sync=success` (or a safe error status).
+5. Confirm latest sync status is shown in settings.
+6. Confirm `sync_runs` contains a new row with `running` then `success` or `failed`.
+7. Confirm `activities` contains upserted rows keyed by `(user_id, strava_activity_id)`.
+8. Confirm `strava_connections.last_synced_at` is updated on success.
+9. Confirm no access token or refresh token is exposed in browser payloads.
+
+### Manual sync behavior (Phase 8)
+
+- Sync requests are signed server-side with `WORKER_SHARED_SECRET` and verified by the Worker.
+- Worker route: `POST /sync/manual`.
+- If `last_synced_at` exists, sync fetches with `after = last_synced_at - 1 day` to catch late edits.
+- First sync uses a capped backfill:
+  - `per_page=100`
+  - `maxPages=10`
+  - maximum `1,000` activities per manual sync invocation.
+- Tokens are refreshed when expired or expiring within 5 minutes.
+- `sync_runs` records `running`, `success`, or `failed` with safe error messages.
+
+### Troubleshooting
+
+- `sync=not_connected`: no `strava_connections` row exists for the user. Reconnect Strava.
+- `sync=running`: a recent `running` sync exists (10 minute guard). Wait and retry.
+- `sync=error`: worker failed to refresh token, fetch activities, or persist data. Check worker logs.
+- `Invalid token` from worker: `WORKER_SHARED_SECRET` mismatch between web server env and worker env.
+
 ## Supabase
 
 Local development setup and schema docs are in `supabase/README.md`.
 
 Tables: `profiles`, `strava_connections`, `oauth_states`, `activities`, `sync_runs`.
 Views: `weekly_activity_minutes`, `monthly_distance_by_sport`, `yearly_running_distance`, `weekly_sport_breakdown`.
+
+## Current non-goals
+
+- No scheduled sync/Cron triggers yet.
+- No Strava webhooks yet.
+- Dashboard remains mock-data based in this phase.
