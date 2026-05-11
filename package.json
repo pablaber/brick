@@ -8,6 +8,7 @@
     "check": "turbo run check",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "db:reset": "npx supabase db reset",
     "db:types": "npx supabase gen types typescript --local > packages/shared/src/database.types.ts",
     "format": "prettier --check .",
     "format:write": "prettier --write ."

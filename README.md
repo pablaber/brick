@@ -50,6 +50,7 @@ Run from repo root:
 - `pnpm test`: Run workspace test tasks.
 - `pnpm format`: Check formatting with Prettier.
 - `pnpm format:write`: Auto-fix formatting.
+- `pnpm db:reset`: Reset the local Supabase database and re-run migrations.
 - `pnpm db:types`: Generate Supabase TypeScript types to `packages/shared/src/database.types.ts`.
 
 ## Getting Started
