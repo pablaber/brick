@@ -287,27 +287,27 @@ ALTER TABLE ONLY "public"."sync_runs"
 
 
 
-CREATE POLICY "Users can insert their own profile" ON "public"."profiles" FOR INSERT TO "authenticated" WITH CHECK (("auth"."uid"() = "id"));
+CREATE POLICY "Users can insert their own profile" ON "public"."profiles" FOR INSERT TO "authenticated" WITH CHECK (((SELECT "auth"."uid"()) = "id"));
 
 
 
-CREATE POLICY "Users can select their own Strava connection" ON "public"."strava_connections" FOR SELECT TO "authenticated" USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "Users can select their own Strava connection" ON "public"."strava_connections" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
 
 
 
-CREATE POLICY "Users can select their own activities" ON "public"."activities" FOR SELECT TO "authenticated" USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "Users can select their own activities" ON "public"."activities" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
 
 
 
-CREATE POLICY "Users can select their own profile" ON "public"."profiles" FOR SELECT TO "authenticated" USING (("auth"."uid"() = "id"));
+CREATE POLICY "Users can select their own profile" ON "public"."profiles" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "id"));
 
 
 
-CREATE POLICY "Users can select their own sync runs" ON "public"."sync_runs" FOR SELECT TO "authenticated" USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "Users can select their own sync runs" ON "public"."sync_runs" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
 
 
 
-CREATE POLICY "Users can update their own profile" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (("auth"."uid"() = "id")) WITH CHECK (("auth"."uid"() = "id"));
+CREATE POLICY "Users can update their own profile" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (((SELECT "auth"."uid"()) = "id")) WITH CHECK (((SELECT "auth"."uid"()) = "id"));
 
 
 
@@ -433,7 +433,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
 
 
 
