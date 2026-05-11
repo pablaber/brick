@@ -88,6 +88,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      oauth_states: {
+        Row: {
+          created_at: string;
+          expires_at: string;
+          id: string;
+          provider: string;
+          redirect_to: string | null;
+          state: string;
+          used_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at: string;
+          id?: string;
+          provider: string;
+          redirect_to?: string | null;
+          state: string;
+          used_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          provider?: string;
+          redirect_to?: string | null;
+          state?: string;
+          used_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           created_at: string;

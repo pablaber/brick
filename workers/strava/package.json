@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
     "@workout/shared": "workspace:*",
     "hono": "^4.10.0"
   },

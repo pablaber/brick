@@ -102,6 +102,9 @@ importers:
 
   workers/strava:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.105.4
+        version: 2.105.4
       '@workout/shared':
         specifier: workspace:*
         version: link:../../packages/shared
