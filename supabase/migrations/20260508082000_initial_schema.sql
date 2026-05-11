@@ -1,8 +1,11 @@
 create extension if not exists pgcrypto;
 
+drop extension if exists pg_graphql;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
@@ -183,3 +186,32 @@ select
 from public.activities
 where start_date is not null
 group by user_id, date_trunc('week', start_date), sport_type;
+
+revoke all privileges on schema public from public;
+revoke all privileges on all tables in schema public from anon;
+revoke all privileges on all tables in schema public from authenticated;
+revoke all privileges on all functions in schema public from public;
+revoke all privileges on all functions in schema public from anon;
+revoke all privileges on all functions in schema public from authenticated;
+
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select, insert, update on public.profiles to authenticated;
+grant select (user_id, strava_athlete_id, scope, last_synced_at, created_at, updated_at)
+  on public.strava_connections to authenticated;
+grant select on public.activities to authenticated;
+grant select on public.sync_runs to authenticated;
+grant select on public.weekly_activity_minutes to authenticated;
+grant select on public.monthly_distance_by_sport to authenticated;
+grant select on public.yearly_running_distance to authenticated;
+grant select on public.weekly_sport_breakdown to authenticated;
+
+grant all privileges on public.profiles to service_role;
+grant all privileges on public.strava_connections to service_role;
+grant all privileges on public.activities to service_role;
+grant all privileges on public.sync_runs to service_role;
+grant select on public.weekly_activity_minutes to service_role;
+grant select on public.monthly_distance_by_sport to service_role;
+grant select on public.yearly_running_distance to service_role;
+grant select on public.weekly_sport_breakdown to service_role;
+grant execute on function public.set_updated_at() to service_role;

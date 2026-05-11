@@ -20,3 +20,9 @@ create index oauth_states_expires_at_idx
   on public.oauth_states (expires_at);
 
 alter table public.oauth_states enable row level security;
+
+revoke all privileges on public.oauth_states from public;
+revoke all privileges on public.oauth_states from anon;
+revoke all privileges on public.oauth_states from authenticated;
+
+grant all privileges on public.oauth_states to service_role;
