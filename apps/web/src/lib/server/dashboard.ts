@@ -27,7 +27,7 @@ export async function getStravaConnectionStatus(supabase: Supabase, userId: stri
     connected: !!data,
     stravaAthleteId: data?.strava_athlete_id ?? null,
     scope: data?.scope ?? null,
-    lastSyncedAt: data?.last_synced_at ?? null,
+    lastSyncedAt: data?.last_synced_at ?? null
   };
 }
 
@@ -46,7 +46,7 @@ export async function getLatestSyncRun(supabase: Supabase, userId: string) {
     startedAt: data.started_at,
     completedAt: data.completed_at ?? null,
     activitiesFetched: data.activities_fetched ?? null,
-    error: data.error ?? null,
+    error: data.error ?? null
   };
 }
 
@@ -69,15 +69,11 @@ export async function getRecentActivities(supabase: Supabase, userId: string, li
     movingTimeSeconds: row.moving_time_seconds,
     distanceMeters: row.distance_meters,
     totalElevationGainMeters: row.total_elevation_gain_meters,
-    averageHeartrate: row.average_heartrate,
+    averageHeartrate: row.average_heartrate
   }));
 }
 
-export async function getWeeklyActivityMinutes(
-  supabase: Supabase,
-  userId: string,
-  weeksBack = 16
-) {
+export async function getWeeklyActivityMinutes(supabase: Supabase, userId: string, weeksBack = 16) {
   const { data, error } = await supabase
     .from('weekly_activity_minutes')
     .select('week_start, sport_type, total_moving_minutes, activity_count')
@@ -113,11 +109,7 @@ export async function getYearlyRunningDistance(supabase: Supabase, userId: strin
   return data ?? [];
 }
 
-export async function getWeeklySportBreakdown(
-  supabase: Supabase,
-  userId: string,
-  weeksBack = 16
-) {
+export async function getWeeklySportBreakdown(supabase: Supabase, userId: string, weeksBack = 16) {
   const { data, error } = await supabase
     .from('weekly_sport_breakdown')
     .select(

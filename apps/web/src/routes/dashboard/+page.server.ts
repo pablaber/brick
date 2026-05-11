@@ -7,7 +7,7 @@ import {
   getStravaConnectionStatus,
   getWeeklyActivityMinutes,
   getWeeklySportBreakdown,
-  getYearlyRunningDistance,
+  getYearlyRunningDistance
 } from '$lib/server/dashboard';
 import type { PageServerLoad } from './$types';
 
@@ -24,7 +24,7 @@ export const load: PageServerLoad = async (event) => {
     monthlyDistanceResult,
     yearlyDistanceResult,
     weeklySportBreakdownResult,
-    activityCountResult,
+    activityCountResult
   ] = await Promise.allSettled([
     getStravaConnectionStatus(supabase, userId),
     getLatestSyncRun(supabase, userId),
@@ -33,7 +33,7 @@ export const load: PageServerLoad = async (event) => {
     getMonthlyDistanceBySport(supabase, userId),
     getYearlyRunningDistance(supabase, userId),
     getWeeklySportBreakdown(supabase, userId),
-    getActivityCount(supabase, userId),
+    getActivityCount(supabase, userId)
   ]);
 
   const connection =
@@ -91,7 +91,7 @@ export const load: PageServerLoad = async (event) => {
 
   const yearlyDistanceChart = yearlyRunningDistance.map((row) => ({
     year: row.year_start ?? '',
-    miles: row.total_distance_miles ?? 0,
+    miles: row.total_distance_miles ?? 0
   }));
 
   // Sport breakdown aggregate across weeks
@@ -109,7 +109,7 @@ export const load: PageServerLoad = async (event) => {
     .map(([sport, minutes]) => ({
       sport,
       minutes,
-      pct: totalSportMinutes > 0 ? Math.round((minutes / totalSportMinutes) * 100) : 0,
+      pct: totalSportMinutes > 0 ? Math.round((minutes / totalSportMinutes) * 100) : 0
     }))
     .sort((a, b) => b.minutes - a.minutes);
 
@@ -120,14 +120,14 @@ export const load: PageServerLoad = async (event) => {
       currentYearRunningMiles,
       thisWeekWorkoutMinutes,
       syncedActivityCount: activityCount,
-      lastSyncedAt: connection.lastSyncedAt,
+      lastSyncedAt: connection.lastSyncedAt
     },
     charts: {
       weeklyMinutes: weeklyMinutesChart,
       monthlyDistance: monthlyDistanceChart,
       yearlyDistance: yearlyDistanceChart,
-      sportBreakdown: sportBreakdownChart,
+      sportBreakdown: sportBreakdownChart
     },
-    recentActivities,
+    recentActivities
   };
 };

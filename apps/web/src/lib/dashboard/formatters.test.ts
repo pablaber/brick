@@ -10,7 +10,7 @@ import {
   formatSecondsAsDuration,
   formatSportType,
   formatWeek,
-  formatYear,
+  formatYear
 } from './formatters.js';
 
 describe('formatMiles', () => {
@@ -166,7 +166,7 @@ describe('dashboard data shaping helpers', () => {
       connected: true,
       stravaAthleteId: 12345,
       scope: 'read',
-      lastSyncedAt: null,
+      lastSyncedAt: null
     };
     expect(shape).not.toHaveProperty('access_token');
     expect(shape).not.toHaveProperty('refresh_token');

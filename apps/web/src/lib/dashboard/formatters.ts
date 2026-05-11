@@ -74,7 +74,7 @@ export function formatSportType(sportType: string | null | undefined): string {
     VirtualRun: 'Virtual Run',
     WeightTraining: 'Weights',
     Yoga: 'Yoga',
-    Workout: 'Workout',
+    Workout: 'Workout'
   };
   return map[sportType] ?? sportType;
 }
