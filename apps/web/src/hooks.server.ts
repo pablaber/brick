@@ -5,20 +5,16 @@ import { getSupabasePublicConfig } from '$lib/supabase-config';
 export const handle: Handle = async ({ event, resolve }) => {
   const { url, anonKey } = getSupabasePublicConfig();
 
-  event.locals.supabase = createServerClient(
-    url,
-    anonKey,
-    {
-      cookies: {
-        getAll: () => event.cookies.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            event.cookies.set(name, value, { ...options, path: '/' });
-          });
-        }
+  event.locals.supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll: () => event.cookies.getAll(),
+      setAll: (cookiesToSet) => {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          event.cookies.set(name, value, { ...options, path: '/' });
+        });
       }
     }
-  );
+  });
 
   event.locals.getSession = async () => {
     const {
