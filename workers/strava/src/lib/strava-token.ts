@@ -45,11 +45,11 @@ export async function refreshStravaToken({
     }).toString()
   });
 
-  const raw = (await response.json()) as unknown;
-
   if (!response.ok) {
     throw new Error('Unable to refresh Strava token.');
   }
+
+  const raw = (await response.json()) as unknown;
 
   const refreshedToken = normalizeStravaTokenResponse(raw);
   const nowIso = new Date().toISOString();
