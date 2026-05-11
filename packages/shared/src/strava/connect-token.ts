@@ -1,11 +1,18 @@
 const TOKEN_DELIMITER = '.';
 const DEFAULT_MAX_FUTURE_IAT_SKEW_SECONDS = 60;
+const MANUAL_SYNC_ACTION = 'manual_sync';
 
-export type ConnectTokenPayload = {
+export type SignedUserTokenPayload = {
   userId: string;
   iat: number;
   exp: number;
   nonce: string;
+};
+
+export type ConnectTokenPayload = SignedUserTokenPayload;
+
+export type ManualSyncTokenPayload = SignedUserTokenPayload & {
+  action: typeof MANUAL_SYNC_ACTION;
 };
 
 export type VerifyConnectTokenOptions = {
@@ -31,6 +38,43 @@ export async function verifySignedConnectToken(
   secret: string,
   options: VerifyConnectTokenOptions = {}
 ): Promise<ConnectTokenPayload> {
+  return verifySignedUserToken(token, secret, options);
+}
+
+export async function createSignedManualSyncToken(
+  payload: ManualSyncTokenPayload,
+  secret: string
+): Promise<string> {
+  validateManualSyncPayloadShape(payload);
+  assertSecret(secret);
+
+  const payloadSegment = base64UrlEncodeText(JSON.stringify(payload));
+  const signatureSegment = await signSegment(payloadSegment, secret);
+
+  return `${payloadSegment}${TOKEN_DELIMITER}${signatureSegment}`;
+}
+
+export async function verifySignedManualSyncToken(
+  token: string,
+  secret: string,
+  options: VerifyConnectTokenOptions = {}
+): Promise<ManualSyncTokenPayload> {
+  const payload = (await verifySignedUserToken(token, secret, options)) as SignedUserTokenPayload & {
+    action?: unknown;
+  };
+
+  if (payload.action !== MANUAL_SYNC_ACTION) {
+    throw new Error('Invalid token action.');
+  }
+
+  return payload as ManualSyncTokenPayload;
+}
+
+async function verifySignedUserToken(
+  token: string,
+  secret: string,
+  options: VerifyConnectTokenOptions = {}
+): Promise<SignedUserTokenPayload> {
   assertSecret(secret);
 
   const parts = token.split(TOKEN_DELIMITER);
@@ -127,6 +171,15 @@ function validatePayloadShape(payload: unknown): asserts payload is ConnectToken
 
   if (typeof maybePayload.nonce !== 'string' || maybePayload.nonce.trim().length === 0) {
     throw new Error('Token payload must include nonce.');
+  }
+}
+
+function validateManualSyncPayloadShape(payload: unknown): asserts payload is ManualSyncTokenPayload {
+  validatePayloadShape(payload);
+
+  const maybePayload = payload as Partial<ManualSyncTokenPayload>;
+  if (maybePayload.action !== MANUAL_SYNC_ACTION) {
+    throw new Error('Token payload must include action.');
   }
 }
 

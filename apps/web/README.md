@@ -16,6 +16,8 @@ SvelteKit frontend for the workout dashboard.
 - `/auth/logout` — POST endpoint for sign-out
 - `/dashboard` — protected, mock stats (redirects to login if unauthenticated)
 - `/settings` — protected, account and Strava connection info
+- `/strava/connect` — protected POST endpoint to start OAuth via worker
+- `/sync/manual` — protected POST endpoint to start manual sync via worker
 
 ## Auth
 
@@ -33,7 +35,11 @@ Copy `.env.example` to `.env.local` and fill in values from `npx supabase status
 ```bash
 PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-status>
+STRAVA_WORKER_URL=http://localhost:8787
+WORKER_SHARED_SECRET=<must-match-worker-shared-secret>
 ```
+
+`STRAVA_WORKER_URL` and `WORKER_SHARED_SECRET` are server-only and must not be exposed through `PUBLIC_` vars.
 
 ## Commands
 
@@ -51,4 +57,10 @@ If Cloudflare worker configuration changes, regenerate types:
 pnpm --filter web gen
 ```
 
-`/dashboard` is currently powered by mock data only.
+## Manual sync
+
+- Settings page shows Strava connection state and latest sync run.
+- `Sync now` submits to SvelteKit server route (`POST /sync/manual`), never directly from browser to worker.
+- Worker activity fetch is capped to 1,000 activities per manual sync (`100 x 10 pages`).
+
+`/dashboard` remains powered by mock data in this phase.

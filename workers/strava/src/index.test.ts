@@ -134,12 +134,6 @@ describe('strava worker routes', () => {
     expect(response.headers.get('location')).toContain('www.strava.com/oauth/authorize');
   });
 
-  it('POST /sync/manual returns placeholder payload', async () => {
-    const response = await app.request('/sync/manual', { method: 'POST' }, env);
-
-    expect(response.status).toBe(200);
-  });
-
   it('GET /strava/callback rejects missing state', async () => {
     const response = await app.request('/strava/callback?code=test-code', undefined, env);
 
