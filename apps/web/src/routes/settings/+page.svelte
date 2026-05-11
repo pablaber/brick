@@ -111,7 +111,7 @@
 		syncProgressFetched = 0;
 		syncProgressTotal = null;
 		syncProgressPercent = 0;
-		syncProgressMessage = 'Preparing sync…';
+		syncProgressMessage = 'Checking Strava activities…';
 
 		let cursorBefore: number | undefined = undefined;
 		let syncRunId: string | undefined = undefined;
@@ -155,14 +155,14 @@
 
 				if (!body.hasMore) {
 					syncProgressPercent = 100;
-					syncProgressMessage = `Synced ${syncProgressFetched} activities`;
+					syncProgressMessage = `Checked ${syncProgressFetched} activities`;
 					window.location.assign('/settings?sync=success');
 					return;
 				}
 
 				syncProgressMessage = syncProgressTotal
-					? `Synced ${syncProgressFetched} of ~${syncProgressTotal} activities`
-					: `Synced ${syncProgressFetched} activities`;
+					? `Checked ${syncProgressFetched} of ~${syncProgressTotal} activities`
+					: `Checked ${syncProgressFetched} activities`;
 
 				if (!body.nextCursorBefore || !body.syncRunId) {
 					window.location.assign('/settings?sync=error');
@@ -290,7 +290,7 @@
 						{/if}
 					</li>
 					<li class="list-item">
-						<span>Activities Fetched</span>
+						<span>Activities Checked</span>
 						<strong>{data.latestSyncRun.activities_fetched ?? '0'}</strong>
 					</li>
 					{#if data.latestSyncRun.error}
