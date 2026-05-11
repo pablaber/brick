@@ -1,4 +1,4 @@
-import { STRAVA_WORKER_URL, WORKER_SHARED_SECRET } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
 import { createSignedConnectToken } from '@workout/shared';
 
@@ -10,8 +10,8 @@ const CONNECT_TOKEN_TTL_SECONDS = 5 * 60;
 export const POST: RequestHandler = async (event) => {
   const user = await requireUser(event);
 
-  const workerUrl = STRAVA_WORKER_URL?.trim();
-  const sharedSecret = WORKER_SHARED_SECRET?.trim();
+  const workerUrl = env.STRAVA_WORKER_URL?.trim();
+  const sharedSecret = env.WORKER_SHARED_SECRET?.trim();
 
   if (!workerUrl || !sharedSecret) {
     console.error('Missing STRAVA_WORKER_URL or WORKER_SHARED_SECRET.');
@@ -34,5 +34,3 @@ export const POST: RequestHandler = async (event) => {
 
   throw redirect(303, startUrl.toString());
 };
-
-export const GET = POST;
