@@ -1,6 +1,7 @@
 import type { StravaSummaryActivity } from '@workout/shared';
 
 const STRAVA_ACTIVITIES_URL = 'https://www.strava.com/api/v3/athlete/activities';
+const STRAVA_ATHLETE_STATS_BASE_URL = 'https://www.strava.com/api/v3/athletes';
 
 export type FetchStravaActivitiesOptions = {
   accessToken: string;
@@ -8,6 +9,12 @@ export type FetchStravaActivitiesOptions = {
   before?: number;
   perPage?: number;
   maxPages?: number;
+  fetchImpl?: typeof fetch;
+};
+
+export type FetchStravaActivityTotalCountOptions = {
+  accessToken: string;
+  athleteId: number;
   fetchImpl?: typeof fetch;
 };
 
@@ -46,6 +53,30 @@ export async function fetchStravaActivities({
   }
 
   return activities;
+}
+
+export async function fetchStravaActivityTotalCount({
+  accessToken,
+  athleteId,
+  fetchImpl = fetch
+}: FetchStravaActivityTotalCountOptions): Promise<number | null> {
+  if (!Number.isSafeInteger(athleteId) || athleteId <= 0) {
+    return null;
+  }
+
+  const response = await fetchImpl(`${STRAVA_ATHLETE_STATS_BASE_URL}/${athleteId}/stats`, {
+    method: 'GET',
+    headers: {
+      authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const raw = (await response.json()) as unknown;
+  return normalizeActivityCountFromStats(raw);
 }
 
 export function buildStravaActivitiesUrl({
@@ -93,4 +124,31 @@ function normalizeStravaSummaryActivity(raw: unknown): StravaSummaryActivity {
   }
 
   return activity as StravaSummaryActivity;
+}
+
+function normalizeActivityCountFromStats(raw: unknown): number | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const stats = raw as {
+    all_ride_totals?: { count?: unknown };
+    all_run_totals?: { count?: unknown };
+    all_swim_totals?: { count?: unknown };
+  };
+
+  const rideCount = normalizeCount(stats.all_ride_totals?.count);
+  const runCount = normalizeCount(stats.all_run_totals?.count);
+  const swimCount = normalizeCount(stats.all_swim_totals?.count);
+  const total = rideCount + runCount + swimCount;
+
+  return total > 0 ? total : null;
+}
+
+function normalizeCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+
+  return Math.floor(value);
 }

@@ -38,7 +38,8 @@ const mockState = vi.hoisted(() => ({
     created_at: string;
     updated_at: string;
   } | null,
-  latestSyncRunUpdate: null as Record<string, unknown> | null
+  latestSyncRunUpdate: null as Record<string, unknown> | null,
+  estimatedTotalActivities: 0
 }));
 
 vi.mock('../lib/supabase.js', () => {
@@ -66,7 +67,14 @@ vi.mock('../lib/supabase.js', () => {
             insert: () => ({
               select: () => ({
                 single: async () => ({
-                  data: mockState.insertSyncRunError ? null : { id: mockState.insertedSyncRunId },
+                  data: mockState.insertSyncRunError
+                    ? null
+                    : {
+                        id: mockState.insertedSyncRunId,
+                        user_id: '2b4698be-0ebd-4a4a-a6f1-3c65ce9a4510',
+                        status: 'running',
+                        activities_fetched: 0
+                      },
                   error: mockState.insertSyncRunError
                 })
               })
@@ -112,7 +120,8 @@ vi.mock('../lib/supabase.js', () => {
 
 vi.mock('../lib/strava-api.js', () => {
   return {
-    fetchStravaActivities: vi.fn(async () => mockState.activities)
+    fetchStravaActivities: vi.fn(async () => mockState.activities),
+    fetchStravaActivityTotalCount: vi.fn(async () => mockState.estimatedTotalActivities)
   };
 });
 
@@ -169,6 +178,7 @@ describe('POST /sync/manual', () => {
     mockState.shouldRefresh = false;
     mockState.refreshedConnection = null;
     mockState.latestSyncRunUpdate = null;
+    mockState.estimatedTotalActivities = 0;
   });
 
   it('rejects missing token', async () => {
@@ -275,16 +285,24 @@ describe('POST /sync/manual', () => {
     const body = await response.json<{
       ok: boolean;
       syncRunId: string;
-      activitiesFetched: number;
+      batchActivitiesFetched: number;
+      totalActivitiesFetched: number;
       activitiesUpserted: number;
+      hasMore: boolean;
+      nextCursorBefore: number | null;
+      estimatedTotalActivities: number;
       lastSyncedAt: string;
     }>();
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.syncRunId).toBe('sync-run-1');
-    expect(body.activitiesFetched).toBe(2);
+    expect(body.batchActivitiesFetched).toBe(2);
+    expect(body.totalActivitiesFetched).toBe(2);
     expect(body.activitiesUpserted).toBe(2);
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursorBefore).toBeNull();
+    expect(body.estimatedTotalActivities).toBe(0);
     expect(body.lastSyncedAt).toBeTruthy();
     expect(mockState.latestSyncRunUpdate?.status).toBe('success');
   });

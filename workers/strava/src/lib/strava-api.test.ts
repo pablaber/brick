@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildStravaActivitiesUrl, fetchStravaActivities } from './strava-api.js';
+import {
+  buildStravaActivitiesUrl,
+  fetchStravaActivities,
+  fetchStravaActivityTotalCount
+} from './strava-api.js';
 
 describe('buildStravaActivitiesUrl', () => {
   it('builds activities URL with pagination and time filters', () => {
@@ -87,5 +91,50 @@ describe('fetchStravaActivities', () => {
         fetchImpl
       })
     ).rejects.toThrow('Unable to fetch Strava activities.');
+  });
+});
+
+describe('fetchStravaActivityTotalCount', () => {
+  it('returns summed totals for rides, runs, and swims', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            all_ride_totals: { count: 120 },
+            all_run_totals: { count: 80 },
+            all_swim_totals: { count: 5 }
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+    );
+
+    const total = await fetchStravaActivityTotalCount({
+      accessToken: 'token',
+      athleteId: 123,
+      fetchImpl
+    });
+
+    expect(total).toBe(205);
+  });
+
+  it('returns null for non-2xx responses', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: 'error' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' }
+        })
+    );
+
+    const total = await fetchStravaActivityTotalCount({
+      accessToken: 'token',
+      athleteId: 123,
+      fetchImpl
+    });
+
+    expect(total).toBeNull();
   });
 });
