@@ -1,11 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
-import { env } from '$env/dynamic/public';
 import type { Handle } from '@sveltejs/kit';
+import { getSupabasePublicConfig } from '$lib/supabase-config';
 
 export const handle: Handle = async ({ event, resolve }) => {
+  const { url, anonKey } = getSupabasePublicConfig();
+
   event.locals.supabase = createServerClient(
-    env.PUBLIC_SUPABASE_URL!,
-    env.PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll: () => event.cookies.getAll(),

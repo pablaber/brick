@@ -69,7 +69,7 @@ npx supabase status
 Copy the API URL and `anon key` from `supabase status` output into `apps/web/.env.local`:
 
 ```bash
-PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-status>
 ```
 
@@ -82,6 +82,11 @@ pnpm --filter web dev
 ```
 
 Then open the app locally. Sign up at `/auth/login`, then visit `/dashboard` to see the mock stats UI.
+
+### Dev Links
+
+- Site: http://localhost:5173
+- Supabase Dashboard (Studio): http://127.0.0.1:54323
 
 ## Supabase
 

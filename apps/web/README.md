@@ -31,7 +31,7 @@ Auth is handled server-side via `@supabase/ssr`:
 Copy `.env.example` to `.env.local` and fill in values from `npx supabase status`:
 
 ```bash
-PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-status>
 ```
 
