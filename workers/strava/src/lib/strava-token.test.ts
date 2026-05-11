@@ -50,11 +50,12 @@ describe('refreshStravaToken', () => {
       athlete: { id: 99 }
     };
 
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
     );
 
     const connection = {

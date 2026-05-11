@@ -59,7 +59,11 @@ export async function verifySignedManualSyncToken(
   secret: string,
   options: VerifyConnectTokenOptions = {}
 ): Promise<ManualSyncTokenPayload> {
-  const payload = (await verifySignedUserToken(token, secret, options)) as SignedUserTokenPayload & {
+  const payload = (await verifySignedUserToken(
+    token,
+    secret,
+    options
+  )) as SignedUserTokenPayload & {
     action?: unknown;
   };
 
@@ -174,7 +178,9 @@ function validatePayloadShape(payload: unknown): asserts payload is ConnectToken
   }
 }
 
-function validateManualSyncPayloadShape(payload: unknown): asserts payload is ManualSyncTokenPayload {
+function validateManualSyncPayloadShape(
+  payload: unknown
+): asserts payload is ManualSyncTokenPayload {
   validatePayloadShape(payload);
 
   const maybePayload = payload as Partial<ManualSyncTokenPayload>;

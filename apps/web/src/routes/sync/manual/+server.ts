@@ -77,8 +77,8 @@ export const POST: RequestHandler = async (event) => {
 function isRedirect(error: unknown): error is { status: number } {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      'status' in error &&
-      typeof (error as { status: unknown }).status === 'number'
+    typeof error === 'object' &&
+    'status' in error &&
+    typeof (error as { status: unknown }).status === 'number'
   );
 }

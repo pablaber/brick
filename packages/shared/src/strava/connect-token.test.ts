@@ -60,7 +60,10 @@ describe('strava connect token signing', () => {
 describe('strava manual sync token signing', () => {
   it('accepts a valid manual sync token', async () => {
     const nowSeconds = 1_700_000_000;
-    const token = await createSignedManualSyncToken(buildManualSyncPayload(nowSeconds), sharedSecret);
+    const token = await createSignedManualSyncToken(
+      buildManualSyncPayload(nowSeconds),
+      sharedSecret
+    );
 
     const payload = await verifySignedManualSyncToken(token, sharedSecret, { nowSeconds });
 
@@ -72,8 +75,8 @@ describe('strava manual sync token signing', () => {
     const nowSeconds = 1_700_000_000;
     const token = await createSignedConnectToken(buildPayload(nowSeconds), sharedSecret);
 
-    await expect(
-      verifySignedManualSyncToken(token, sharedSecret, { nowSeconds })
-    ).rejects.toThrow('Invalid token action.');
+    await expect(verifySignedManualSyncToken(token, sharedSecret, { nowSeconds })).rejects.toThrow(
+      'Invalid token action.'
+    );
   });
 });

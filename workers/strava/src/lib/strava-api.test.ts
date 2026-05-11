@@ -55,12 +55,13 @@ describe('fetchStravaActivities', () => {
   });
 
   it('respects maxPages', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn(
+      async () =>
         new Response(JSON.stringify([{ id: 1 }]), {
           status: 200,
           headers: { 'content-type': 'application/json' }
         })
-      );
+    );
 
     await fetchStravaActivities({
       accessToken: 'token',
@@ -72,11 +73,12 @@ describe('fetchStravaActivities', () => {
   });
 
   it('throws a safe error when Strava returns non-2xx', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ message: 'invalid token' }), {
-        status: 401,
-        headers: { 'content-type': 'application/json' }
-      })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: 'invalid token' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' }
+        })
     );
 
     await expect(

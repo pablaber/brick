@@ -153,8 +153,10 @@ syncRoutes.post('/manual', async (c) => {
       lastSyncedAt: nowIso
     });
   } catch (error) {
-    const statusCode: SyncRouteStatusCode = error instanceof ManualSyncError ? error.statusCode : 500;
-    const safeErrorMessage = error instanceof ManualSyncError ? error.message : 'Manual sync failed.';
+    const statusCode: SyncRouteStatusCode =
+      error instanceof ManualSyncError ? error.statusCode : 500;
+    const safeErrorMessage =
+      error instanceof ManualSyncError ? error.message : 'Manual sync failed.';
 
     console.error('Manual sync failed.', error);
     await supabase
