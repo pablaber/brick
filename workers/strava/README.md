@@ -23,6 +23,13 @@ The worker runs with Wrangler on `http://localhost:8787`.
 - `GET /strava/callback`
 - `POST /sync/manual`
 
+Local dev endpoint URLs:
+
+- `http://localhost:8787/health`
+- `http://localhost:8787/strava/connect`
+- `http://localhost:8787/strava/callback`
+- `http://localhost:8787/sync/manual`
+
 Unknown routes return JSON `404`:
 
 ```json
