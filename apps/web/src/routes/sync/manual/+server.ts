@@ -3,6 +3,7 @@ import { json, redirect } from '@sveltejs/kit';
 import { createSignedManualSyncToken } from '@workout/shared';
 
 import { requireUser } from '$lib/server/auth';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
 const SYNC_TOKEN_TTL_SECONDS = 5 * 60;
@@ -33,7 +34,7 @@ export const POST: RequestHandler = async (event) => {
   const sharedSecret = env.WORKER_SHARED_SECRET?.trim();
 
   if (!workerUrl || !sharedSecret) {
-    console.error('Missing STRAVA_WORKER_URL or WORKER_SHARED_SECRET.');
+    logger.error({ userId: user.id }, 'Missing STRAVA_WORKER_URL or WORKER_SHARED_SECRET.');
 
     if (expectsJson(event.request)) {
       return json({ ok: false, error: 'Sync is not configured.' }, { status: 500 });
@@ -43,6 +44,14 @@ export const POST: RequestHandler = async (event) => {
   }
 
   const payload = await parseJsonPayload(event.request);
+  logger.info({
+    userId: user.id,
+    cursorBefore: payload?.cursorBefore ?? null,
+    syncRunId: payload?.syncRunId ?? null,
+    estimatedTotalActivities: payload?.estimatedTotalActivities ?? null,
+    expectsJson: expectsJson(event.request)
+  }, 'Manual sync requested.');
+
   const nowSeconds = Math.floor(Date.now() / 1000);
   const token = await createSignedManualSyncToken(
     {
@@ -72,34 +81,66 @@ export const POST: RequestHandler = async (event) => {
     });
 
     const responseBody = (await response.json()) as WorkerSyncResponse;
+    logger.info({
+      userId: user.id,
+      status: response.status,
+      ok: response.ok,
+      bodyOk: responseBody.ok ?? null,
+      syncRunId: responseBody.syncRunId ?? null,
+      hasMore: responseBody.hasMore ?? null,
+      nextCursorBefore: responseBody.nextCursorBefore ?? null,
+      totalActivitiesFetched: responseBody.totalActivitiesFetched ?? null,
+      activitiesUpserted: responseBody.activitiesUpserted ?? null,
+      error: responseBody.error ?? null
+    }, 'Manual sync worker response.');
 
     if (expectsJson(event.request)) {
       return json(responseBody, { status: response.status });
     }
 
     if (response.ok && responseBody.ok && responseBody.hasMore) {
+      logger.info({
+        userId: user.id,
+        syncRunId: responseBody.syncRunId ?? payload?.syncRunId ?? null
+      }, 'Manual sync redirecting with running status.');
       throw redirect(303, '/settings?sync=running');
     }
 
     if (response.ok && responseBody.ok) {
+      logger.info({
+        userId: user.id,
+        syncRunId: responseBody.syncRunId ?? payload?.syncRunId ?? null
+      }, 'Manual sync redirecting with success status.');
       throw redirect(303, '/settings?sync=success');
     }
 
     if (response.status === 409) {
+      logger.info({
+        userId: user.id,
+        syncRunId: responseBody.syncRunId ?? payload?.syncRunId ?? null
+      }, 'Manual sync redirecting with running status (409 conflict).');
       throw redirect(303, '/settings?sync=running');
     }
 
     if (response.status === 400) {
+      logger.info({
+        userId: user.id
+      }, 'Manual sync redirecting with not_connected status.');
       throw redirect(303, '/settings?sync=not_connected');
     }
 
+    logger.warn({
+      userId: user.id,
+      status: response.status,
+      error: responseBody.error ?? null
+    }, 'Manual sync redirecting with error status due to worker response.');
     throw redirect(303, '/settings?sync=error');
   } catch (error) {
     if (isRedirect(error)) {
       throw error;
     }
 
-    console.error('Manual sync request failed.', error);
+    logger.error({ userId: user.id, err: error }, 'Manual sync request failed.');
 
     if (expectsJson(event.request)) {
       return json({ ok: false, error: 'Manual sync request failed.' }, { status: 500 });

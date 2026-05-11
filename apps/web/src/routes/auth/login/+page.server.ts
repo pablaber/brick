@@ -3,8 +3,8 @@ import { ensureProfile } from '$lib/server/profiles';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const session = await locals.getSession();
-  if (session) {
+  const user = await locals.getUser();
+  if (user) {
     redirect(303, '/dashboard');
   }
 };
