@@ -24,6 +24,68 @@
 	const weeklyMax = $derived(Math.max(...data.charts.weeklyMinutes.map((d) => d.minutes), 1));
 	const monthlyMax = $derived(Math.max(...data.charts.monthlyDistance.map((d) => d.miles), 1));
 	const yearlyMax = $derived(Math.max(...data.charts.yearlyDistance.map((d) => d.miles), 1));
+
+	const SVG_H = 48;
+	const YEAR_WEEKS = 52;
+	const SVG_PAD = 2;
+
+	let sparkWidth = $state(0);
+
+	function weekToX(weekIdx: number, w: number): number {
+		return SVG_PAD + (weekIdx / YEAR_WEEKS) * (w - SVG_PAD * 2);
+	}
+
+	function sparkCoords(points: { miles: number }[], w: number) {
+		if (points.length === 0 || w <= 0) return [];
+		const max = Math.max(...points.map((p) => p.miles), 1);
+		const h = SVG_H - SVG_PAD * 2;
+		return points.map((p, i) => ({
+			x: weekToX(i, w),
+			y: SVG_PAD + h - (p.miles / max) * h
+		}));
+	}
+
+	function sparkPaths(coords: { x: number; y: number }[]): { line: string; area: string } {
+		if (coords.length === 0) return { line: '', area: '' };
+		const line = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+		const last = coords[coords.length - 1];
+		const first = coords[0];
+		const area = `${line} L${last.x},${SVG_H} L${first.x},${SVG_H} Z`;
+		return { line, area };
+	}
+
+	const runningCoords = $derived(sparkCoords(data.charts.runningProgress, sparkWidth));
+	const cyclingCoords = $derived(sparkCoords(data.charts.cyclingProgress, sparkWidth));
+	const runningSpark = $derived(sparkPaths(runningCoords));
+	const cyclingSpark = $derived(sparkPaths(cyclingCoords));
+
+	const monthTicks = $derived((() => {
+		if (sparkWidth <= 0) return [];
+		const year = new Date().getFullYear();
+		const yearStart = new Date(year, 0, 1);
+		const months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+		return months.map((label, i) => {
+			const monthStart = new Date(year, i + 1, 1);
+			const weekFloat = (monthStart.getTime() - yearStart.getTime()) / (7 * 24 * 60 * 60 * 1000);
+			const x = weekToX(weekFloat, sparkWidth);
+			return { label, x, pct: (x / sparkWidth) * 100 };
+		});
+	})());
+
+	let runningHover = $state<number | null>(null);
+	let cyclingHover = $state<number | null>(null);
+
+	function handleSparkMove(
+		e: MouseEvent,
+		pointCount: number,
+		setIndex: (i: number | null) => void
+	) {
+		const el = e.currentTarget as HTMLElement;
+		const rect = el.getBoundingClientRect();
+		const xPct = (e.clientX - rect.left) / rect.width;
+		const idx = Math.round(xPct * YEAR_WEEKS);
+		setIndex(idx >= 0 && idx < pointCount ? idx : null);
+	}
 </script>
 
 <section class="page">
@@ -64,13 +126,85 @@
 			<article class="card">
 				<h2>Running Miles This Year</h2>
 				<p class="metric">{formatMiles(data.stats.currentYearRunningMiles)}</p>
-				<p class="metric-caption">Cumulative running miles in {new Date().getFullYear()}</p>
+				{#if data.charts.runningProgress.length > 1}
+					<div
+						class="sparkline-wrapper"
+						role="img"
+						onmousemove={(e) => handleSparkMove(e, data.charts.runningProgress.length, (i) => runningHover = i)}
+						onmouseleave={() => runningHover = null}
+					>
+						<div class="sparkline-graph" bind:clientWidth={sparkWidth}>
+							{#if sparkWidth > 0}
+								<svg class="sparkline" viewBox="0 0 {sparkWidth} {SVG_H}">
+									{#each monthTicks as tick}
+										<line x1={tick.x} y1="0" x2={tick.x} y2={SVG_H} class="sparkline-month-tick" />
+									{/each}
+									<path d={runningSpark.area} class="sparkline-area sparkline-running" />
+									<path d={runningSpark.line} class="sparkline-line sparkline-running-line" />
+									{#if runningHover !== null}
+										{@const pt = runningCoords[runningHover]}
+										<line x1={pt.x} y1="0" x2={pt.x} y2={SVG_H} class="sparkline-cursor" />
+										<circle cx={pt.x} cy={pt.y} r="4" class="sparkline-dot dot-running-stroke" />
+									{/if}
+								</svg>
+							{/if}
+							{#if runningHover !== null && sparkWidth > 0}
+								{@const pt = runningCoords[runningHover]}
+								<div class="sparkline-tip" style="left: {(pt.x / sparkWidth) * 100}%">
+									<strong>{formatMiles(data.charts.runningProgress[runningHover].miles)}</strong>
+									<span>{formatWeek(data.charts.runningProgress[runningHover].week)}</span>
+								</div>
+							{/if}
+						</div>
+						<div class="sparkline-month-labels">
+							{#each monthTicks as tick}
+								<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</article>
 
 			<article class="card">
 				<h2>Cycling Miles This Year</h2>
 				<p class="metric">{formatMiles(data.stats.currentYearCyclingMiles)}</p>
-				<p class="metric-caption">Cumulative cycling miles in {new Date().getFullYear()}</p>
+				{#if data.charts.cyclingProgress.length > 1}
+					<div
+						class="sparkline-wrapper"
+						role="img"
+						onmousemove={(e) => handleSparkMove(e, data.charts.cyclingProgress.length, (i) => cyclingHover = i)}
+						onmouseleave={() => cyclingHover = null}
+					>
+						<div class="sparkline-graph" bind:clientWidth={sparkWidth}>
+							{#if sparkWidth > 0}
+								<svg class="sparkline" viewBox="0 0 {sparkWidth} {SVG_H}">
+									{#each monthTicks as tick}
+										<line x1={tick.x} y1="0" x2={tick.x} y2={SVG_H} class="sparkline-month-tick" />
+									{/each}
+									<path d={cyclingSpark.area} class="sparkline-area sparkline-cycling" />
+									<path d={cyclingSpark.line} class="sparkline-line sparkline-cycling-line" />
+									{#if cyclingHover !== null}
+										{@const pt = cyclingCoords[cyclingHover]}
+										<line x1={pt.x} y1="0" x2={pt.x} y2={SVG_H} class="sparkline-cursor" />
+										<circle cx={pt.x} cy={pt.y} r="4" class="sparkline-dot dot-cycling-stroke" />
+									{/if}
+								</svg>
+							{/if}
+							{#if cyclingHover !== null && sparkWidth > 0}
+								{@const pt = cyclingCoords[cyclingHover]}
+								<div class="sparkline-tip" style="left: {(pt.x / sparkWidth) * 100}%">
+									<strong>{formatMiles(data.charts.cyclingProgress[cyclingHover].miles)}</strong>
+									<span>{formatWeek(data.charts.cyclingProgress[cyclingHover].week)}</span>
+								</div>
+							{/if}
+						</div>
+						<div class="sparkline-month-labels">
+							{#each monthTicks as tick}
+								<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</article>
 
 			<article class="card">
@@ -104,16 +238,16 @@
 									<div class="tooltip-header">Wk of {formatWeek(item.week)}</div>
 									<div class="tooltip-total">{formatMinutes(item.minutes)} total</div>
 									{#if item.running > 0}
-										<div class="tooltip-row"><span class="tooltip-dot dot-running"></span>Running {formatMinutes(item.running)}</div>
+										<div class="tooltip-row"><span class="tooltip-label"><span class="tooltip-dot dot-running"></span>Running</span><span>{formatMinutes(item.running)}</span></div>
 									{/if}
 									{#if item.cycling > 0}
-										<div class="tooltip-row"><span class="tooltip-dot dot-cycling"></span>Cycling {formatMinutes(item.cycling)}</div>
+										<div class="tooltip-row"><span class="tooltip-label"><span class="tooltip-dot dot-cycling"></span>Cycling</span><span>{formatMinutes(item.cycling)}</span></div>
 									{/if}
 									{#if item.swimming > 0}
-										<div class="tooltip-row"><span class="tooltip-dot dot-swimming"></span>Swimming {formatMinutes(item.swimming)}</div>
+										<div class="tooltip-row"><span class="tooltip-label"><span class="tooltip-dot dot-swimming"></span>Swimming</span><span>{formatMinutes(item.swimming)}</span></div>
 									{/if}
 									{#if item.other > 0}
-										<div class="tooltip-row"><span class="tooltip-dot dot-other"></span>Other {formatMinutes(item.other)}</div>
+										<div class="tooltip-row"><span class="tooltip-label"><span class="tooltip-dot dot-other"></span>Other</span><span>{formatMinutes(item.other)}</span></div>
 									{/if}
 								</div>
 								<div class="chart-stack">
@@ -269,6 +403,110 @@
 		font-weight: 500;
 	}
 
+	/* Sparkline */
+	.sparkline-wrapper {
+		margin-top: 0.5rem;
+		cursor: crosshair;
+	}
+
+	.sparkline-graph {
+		position: relative;
+		height: 48px;
+	}
+
+	.sparkline {
+		display: block;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+
+	.sparkline-area {
+		opacity: 0.15;
+	}
+
+	.sparkline-line {
+		fill: none;
+		stroke-width: 2;
+	}
+
+	.sparkline-month-tick {
+		stroke: var(--text-muted);
+		stroke-width: 1;
+		opacity: 0.15;
+	}
+
+	.sparkline-month-labels {
+		position: relative;
+		height: 14px;
+	}
+
+	.sparkline-month-label {
+		position: absolute;
+		transform: translateX(-50%);
+		font-size: 0.55rem;
+		color: var(--text-muted);
+		pointer-events: none;
+	}
+
+	.sparkline-cursor {
+		stroke: var(--text-muted);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.5;
+	}
+
+	.sparkline-dot {
+		fill: var(--surface);
+		stroke-width: 2;
+	}
+
+	.dot-running-stroke {
+		stroke: var(--brand);
+	}
+
+	.dot-cycling-stroke {
+		stroke: #e8a838;
+	}
+
+	.sparkline-tip {
+		position: absolute;
+		bottom: 100%;
+		transform: translateX(-50%);
+		background: #1a2740;
+		color: #fff;
+		font-size: 0.7rem;
+		padding: 3px 7px;
+		border-radius: 5px;
+		white-space: nowrap;
+		pointer-events: none;
+		z-index: 20;
+		display: flex;
+		gap: 6px;
+		align-items: baseline;
+	}
+
+	.sparkline-tip span {
+		color: #94a3b8;
+		font-size: 0.62rem;
+	}
+
+	.sparkline-running {
+		fill: var(--brand);
+	}
+
+	.sparkline-running-line {
+		stroke: var(--brand);
+	}
+
+	.sparkline-cycling {
+		fill: #e8a838;
+	}
+
+	.sparkline-cycling-line {
+		stroke: #e8a838;
+	}
+
 	/* Bar chart */
 	.chart-wrapper {
 		margin: 0.75rem 0 0.5rem;
@@ -331,9 +569,16 @@
 	.tooltip-row {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 10px;
 		font-weight: 400;
 		font-size: 0.68rem;
+		justify-content: space-between;
+	}
+
+	.tooltip-label {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 
 	.tooltip-dot {
