@@ -12,6 +12,9 @@ npx supabase start
 
 This starts the local Postgres/Auth/API/Studio stack using `supabase/config.toml`.
 
+GraphQL is intentionally not exposed for this app. The migrations drop the unused `pg_graphql`
+extension if it is present, and local API config exposes only the `public` schema for REST.
+
 ## Run migrations
 
 Migrations live in `supabase/migrations` and are applied automatically by `npx supabase start` and `npx supabase db reset`.
