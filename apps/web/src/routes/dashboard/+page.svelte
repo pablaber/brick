@@ -94,13 +94,14 @@
 				) {
 					return [];
 				}
-				return [
-					{
-						id: activity.id,
-						name: activity.name?.trim() || 'Untitled',
-						startDate,
-						weekdayIndex,
-						category: activityCategory(activity.sportType),
+					return [
+						{
+							id: activity.id,
+							stravaActivityId: activity.stravaActivityId,
+							name: activity.name?.trim() || 'Untitled',
+							startDate,
+							weekdayIndex,
+							category: activityCategory(activity.sportType),
 						minutes: movingTimeSeconds / 60
 					}
 				];
@@ -192,19 +193,40 @@
 									<div class="activity-day-group">
 										<div class="activity-day-columns">
 											{#each day.activities as activity (activity.id)}
-												<div class="activity-col has-tooltip">
-													<div class="chart-tooltip">
-														<div class="tooltip-header tooltip-header-activity">
-															<span class={`tooltip-dot dot-${activity.category}`}></span>
-															<span>{activity.name}</span>
+												{#if activity.stravaActivityId}
+													<a
+														href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="activity-col activity-col-link has-tooltip"
+													>
+														<div class="chart-tooltip">
+															<div class="tooltip-header tooltip-header-activity">
+																<span class={`tooltip-dot dot-${activity.category}`}></span>
+																<span>{activity.name}</span>
+															</div>
+															<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
 														</div>
-														<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
+														<div
+															class={`activity-column-bar bar-${activity.category}`}
+															style={`height: ${barHeight(activity.minutes, thisWeekActivityMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
+														></div>
+													</a>
+												{:else}
+													<div class="activity-col has-tooltip">
+														<div class="chart-tooltip">
+															<div class="tooltip-header tooltip-header-activity">
+																<span class={`tooltip-dot dot-${activity.category}`}></span>
+																<span>{activity.name}</span>
+															</div>
+															<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
+														</div>
+														<div
+															class={`activity-column-bar bar-${activity.category}`}
+															style={`height: ${barHeight(activity.minutes, thisWeekActivityMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
+														></div>
 													</div>
-													<div
-														class={`activity-column-bar bar-${activity.category}`}
-														style={`height: ${barHeight(activity.minutes, thisWeekActivityMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
-													></div>
-												</div>
+												{/if}
 											{/each}
 										</div>
 										<span class="activity-col-label">{day.weekdayLabel}</span>
@@ -450,12 +472,21 @@
 		justify-content: flex-end;
 	}
 
+	.activity-col-link {
+		text-decoration: none;
+		cursor: pointer;
+	}
+
 	.activity-column-bar {
 		width: 100%;
 		min-height: 2px;
 		border-radius: 3px 3px 0 0;
 		opacity: 0.8;
 		transition: opacity 100ms ease;
+	}
+
+	.activity-col-link .activity-column-bar {
+		cursor: pointer;
 	}
 
 	.activity-col:hover .activity-column-bar {
