@@ -50,17 +50,6 @@
 	class="page"
 	style={`--color-running: ${data.categoryColors.running}; --color-cycling: ${data.categoryColors.cycling}; --color-swimming: ${data.categoryColors.swimming}; --color-other: ${data.categoryColors.other};`}
 >
-	<header class="page-header">
-		<h1 class="page-title">Dashboard</h1>
-		{#if data.latestSyncRun?.completedAt}
-			<p class="page-subtitle">
-				Last {data.latestSyncRun.syncType} sync {formatDate(data.latestSyncRun.completedAt)}
-			</p>
-		{:else}
-			<p class="page-subtitle">Your workout dashboard</p>
-		{/if}
-	</header>
-
 	{#if !data.connection.connected}
 		<div class="card empty-card">
 			<p class="empty-title">Connect Strava to start seeing your workout dashboard.</p>
