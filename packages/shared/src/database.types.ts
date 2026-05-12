@@ -156,30 +156,36 @@ export type Database = {
       sync_runs: {
         Row: {
           activities_fetched: number | null;
+          activities_upserted: number | null;
           completed_at: string | null;
           created_at: string;
           error: string | null;
           id: string;
+          sync_type: string;
           started_at: string;
           status: string;
           user_id: string;
         };
         Insert: {
           activities_fetched?: number | null;
+          activities_upserted?: number | null;
           completed_at?: string | null;
           created_at?: string;
           error?: string | null;
           id?: string;
+          sync_type?: string;
           started_at?: string;
           status: string;
           user_id: string;
         };
         Update: {
           activities_fetched?: number | null;
+          activities_upserted?: number | null;
           completed_at?: string | null;
           created_at?: string;
           error?: string | null;
           id?: string;
+          sync_type?: string;
           started_at?: string;
           status?: string;
           user_id?: string;

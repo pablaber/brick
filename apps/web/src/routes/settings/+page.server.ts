@@ -23,8 +23,26 @@ export const load: PageServerLoad = async (event) => {
 
   const { data: latestSyncRun } = await event.locals.supabase
     .from('sync_runs')
-    .select('status,started_at,completed_at,activities_fetched,error')
+    .select('status,sync_type,started_at,completed_at,activities_fetched,activities_upserted,error')
     .eq('user_id', user.id)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: latestManualSyncRun } = await event.locals.supabase
+    .from('sync_runs')
+    .select('status,sync_type,started_at,completed_at,activities_fetched,activities_upserted,error')
+    .eq('user_id', user.id)
+    .eq('sync_type', 'manual')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: latestScheduledSyncRun } = await event.locals.supabase
+    .from('sync_runs')
+    .select('status,sync_type,started_at,completed_at,activities_fetched,activities_upserted,error')
+    .eq('user_id', user.id)
+    .eq('sync_type', 'scheduled')
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -61,10 +79,34 @@ export const load: PageServerLoad = async (event) => {
     latestSyncRun: latestSyncRun
       ? {
           status: latestSyncRun.status,
+          sync_type: latestSyncRun.sync_type,
           started_at: latestSyncRun.started_at,
           completed_at: latestSyncRun.completed_at,
           activities_fetched: latestSyncRun.activities_fetched,
+          activities_upserted: latestSyncRun.activities_upserted,
           error: latestSyncRun.error
+        }
+      : null,
+    latestManualSyncRun: latestManualSyncRun
+      ? {
+          status: latestManualSyncRun.status,
+          sync_type: latestManualSyncRun.sync_type,
+          started_at: latestManualSyncRun.started_at,
+          completed_at: latestManualSyncRun.completed_at,
+          activities_fetched: latestManualSyncRun.activities_fetched,
+          activities_upserted: latestManualSyncRun.activities_upserted,
+          error: latestManualSyncRun.error
+        }
+      : null,
+    latestScheduledSyncRun: latestScheduledSyncRun
+      ? {
+          status: latestScheduledSyncRun.status,
+          sync_type: latestScheduledSyncRun.sync_type,
+          started_at: latestScheduledSyncRun.started_at,
+          completed_at: latestScheduledSyncRun.completed_at,
+          activities_fetched: latestScheduledSyncRun.activities_fetched,
+          activities_upserted: latestScheduledSyncRun.activities_upserted,
+          error: latestScheduledSyncRun.error
         }
       : null
   };

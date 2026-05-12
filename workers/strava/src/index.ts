@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 
 import type { Env } from './env.js';
+import { runScheduledSync } from './lib/scheduled-sync.js';
 import { handleError } from './middleware/error.js';
 import { healthRoutes } from './routes/health.js';
 import { stravaRoutes } from './routes/strava.js';
@@ -24,4 +25,13 @@ app.notFound((c) => {
 
 app.onError(handleError);
 
-export default app;
+export { app };
+
+export default {
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    return app.fetch(request, env, ctx);
+  },
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runScheduledSync({ env, controller }));
+  }
+};

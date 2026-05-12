@@ -3,5 +3,8 @@
   "name": "workout-dashboard-strava",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-08",
-  "workers_dev": true
+  "workers_dev": true,
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  }
 }

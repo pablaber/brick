@@ -1,46 +1,61 @@
-# Strava Worker (Phase 8 Manual Sync)
+# Strava Worker (Phase 10 Scheduled Sync)
 
-This Cloudflare Worker handles the Strava OAuth connection flow and manual activity sync. Tokens remain server-side in Supabase.
+This Cloudflare Worker handles:
+
+- Strava OAuth connection flow
+- Manual activity sync (`POST /sync/manual`)
+- Scheduled activity sync via Cloudflare Cron Trigger (`scheduled()`)
+
+Tokens remain server-side in Supabase.
 
 ## Run locally
 
 1. Copy `.dev.vars.example` to `.dev.vars`.
-2. Fill in placeholder values (no real secrets should be committed).
+2. Fill in placeholder values (never commit real secrets).
 3. Start the worker:
 
 ```bash
 pnpm --filter @workout/strava-worker dev
 ```
 
-The worker runs with Wrangler on `http://localhost:8787`.
+Worker default URL: `http://localhost:8787`.
 
 ## Routes
 
 - `GET /health`
+  - Purpose: quick liveliness/status probe for local/dev/prod checks.
+  - Auth: none.
+  - Response: `200` JSON with `ok`, `service`, and `timestamp`.
+
 - `GET /strava/connect?token=<signed-token>`
+  - Purpose: starts Strava OAuth by validating a short-lived signed token from the web app and redirecting to Strava.
+  - Query params: `token` (required).
+  - Auth: token signed with `WORKER_SHARED_SECRET`.
+  - Success: `302` redirect to Strava authorize URL.
+  - Failures: `400` for missing token, `401` for invalid/expired token.
+
 - `GET /strava/callback?code=...&state=...`
-- `POST /sync/manual` (signed server-to-server request from SvelteKit)
+  - Purpose: handles Strava OAuth callback, validates state, exchanges code for tokens, and upserts `strava_connections`.
+  - Query params: `state` and `code` on success path; Strava can also return `error=access_denied`.
+  - Auth: OAuth state validation against `oauth_states` table.
+  - Success: `302` redirect back to `APP_URL/settings?strava=connected`.
+  - Failures: safe redirects like `?strava=denied`, `?strava=invalid_state`, or `?strava=error`.
 
-Local dev endpoint URLs:
+- `POST /sync/manual`
+  - Purpose: runs user activity sync on demand from the web app.
+  - Body: JSON with `token` (required), plus optional `cursorBefore`, `syncRunId`, and `estimatedTotalActivities` for multi-batch/manual backfill flow.
+  - Auth: signed manual sync token (`WORKER_SHARED_SECRET`).
+  - Success: `200` JSON sync summary (`syncRunId`, fetched/upserted counts, pagination fields).
+  - Failures: `409` if a sync is already running, `400` when user has no Strava connection, `500` for internal/safe failure.
 
-- `http://localhost:8787/health`
-- `http://localhost:8787/strava/connect`
-- `http://localhost:8787/strava/callback`
-- `http://localhost:8787/sync/manual`
+- `GET /__scheduled?cron=...` (Wrangler local only)
+  - Purpose: local endpoint exposed by `wrangler dev --test-scheduled` to simulate cron execution.
+  - Auth: none (local dev tool endpoint).
+  - Usage: trigger scheduled handler manually during local testing.
 
-Unknown routes return JSON `404`:
+## Environment Variables
 
-```json
-{ "ok": false, "error": "Not found" }
-```
-
-Unhandled errors return JSON `500`:
-
-```json
-{ "ok": false, "error": "Internal server error" }
-```
-
-## Environment variables
+Required:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -50,59 +65,77 @@ Unhandled errors return JSON `500`:
 - `APP_URL`
 - `WORKER_SHARED_SECRET`
 
-## OAuth flow summary
+Optional scheduled sync tuning:
 
-1. Web app starts OAuth via `POST /strava/connect` server route.
-2. Web app signs a short-lived connect token with `WORKER_SHARED_SECRET`.
-3. Worker validates token on `GET /strava/connect`.
-4. Worker creates `oauth_states` row with 10 minute expiration.
-5. Worker redirects to Strava OAuth authorize URL with `state`.
-6. Strava calls back to `GET /strava/callback`.
-7. Worker validates `state` (exists, not expired, not used).
-8. Worker exchanges `code` for tokens with Strava.
-9. Worker upserts `strava_connections` and marks `oauth_states.used_at`.
-10. Worker redirects to `APP_URL/settings?strava=connected` (or safe error status).
+- `STRAVA_SCHEDULED_SYNC_MIN_INTERVAL_HOURS` (default `6`)
+- `STRAVA_SCHEDULED_SYNC_LIMIT` (default `25`)
 
-## Manual sync flow summary
+## Scheduled Cron Trigger
 
-1. Logged-in user clicks `Sync now` on `/settings`.
-2. Web server route (`POST /sync/manual`) signs short-lived token with `WORKER_SHARED_SECRET`.
-3. Worker validates signature, `iat`, `exp`, and `action=manual_sync`.
-4. Worker checks for a recent running sync (10 minute guard).
-5. Worker inserts `sync_runs(status='running')`.
-6. Worker loads `strava_connections` for the user.
-7. Worker refreshes token if expired or expiring within 5 minutes.
-8. Worker fetches paginated activities from Strava.
-9. Worker maps each activity through shared mapper and upserts `activities`.
-10. Worker updates `strava_connections.last_synced_at`.
-11. Worker marks `sync_runs` success/failed and returns safe JSON.
+The worker defines a cron trigger in `wrangler.jsonc` (`0 */6 * * *`, every 6 hours) that invokes the Worker `scheduled()` handler.
 
-## Manual sync limits (v1)
+Each run:
 
-- `per_page=100`
-- `maxPages=10`
-- max 1,000 activities per manual sync request
-- if `last_synced_at` exists, fetch starts from `last_synced_at - 1 day` to catch late edits
+1. Reads cron metadata (`controller.cron`) and starts a scheduled sync run.
+2. Finds connected users due for sync (`last_synced_at` missing or older than configured interval).
+3. For each due user, runs the same core sync pipeline used by manual sync (token refresh, Strava fetch, activity upsert, sync_runs updates).
+4. Skips users that are currently running a sync or were synced too recently.
+5. Continues processing remaining users if a single user fails.
+6. Logs a safe summary (`usersConsidered`, `usersSynced`, `usersSkipped`, `usersFailed`).
 
-## Local manual test
+## Scheduled Sync Behavior
 
-1. Start web app and worker:
+Production cron schedule is configured in `wrangler.jsonc`:
+
+- `0 */6 * * *` (every 6 hours)
+
+When cron runs, the worker:
+
+1. Loads Strava-connected users.
+2. Filters to users due for sync (never synced or older than interval).
+3. Runs sync sequentially per user.
+4. Skips users with an active running sync.
+5. Reuses the same core sync logic as manual sync.
+6. Records each sync in `sync_runs` with `sync_type='scheduled'`.
+7. Continues processing remaining users when one user fails.
+
+## Manual Sync Behavior
+
+Manual sync still runs via `POST /sync/manual` and:
+
+1. Verifies signed request token.
+2. Checks for running sync lock.
+3. Runs shared sync logic.
+4. Records `sync_runs.sync_type='manual'`.
+
+## Local Scheduled Testing
+
+Cron does not auto-fire locally. Use one of these flows.
+
+Interactive:
 
 ```bash
-pnpm --filter web dev
-pnpm --filter @workout/strava-worker dev
+pnpm --filter @workout/strava-worker dev:scheduled
+curl "http://localhost:8787/__scheduled?cron=0+*/6+*+*+*"
 ```
 
-2. Log in at `http://localhost:5173`.
-3. Open `http://localhost:5173/settings`.
-4. Click `Connect Strava`.
-5. Complete Strava auth and confirm redirect to settings.
-6. Click `Sync now`.
-7. Confirm `/settings?sync=success` (or safe error status).
-8. Verify `sync_runs`, `activities`, and `strava_connections.last_synced_at` in Supabase.
+One-shot:
 
-## Non-goals in this phase
+```bash
+pnpm --filter @workout/strava-worker test:scheduled
+```
 
-- no scheduled sync/Cron triggers
-- no Strava webhooks
-- no background backfill queue
+The one-shot script starts Wrangler in scheduled test mode, waits for `/health`, triggers `/__scheduled`, prints response output, and stops Wrangler.
+
+## Deployment Notes
+
+- Cron triggers are defined in Wrangler config and deployed with the worker.
+- Production secrets must be configured separately; do not commit secret values.
+
+Example commands:
+
+```bash
+wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+wrangler secret put STRAVA_CLIENT_SECRET
+wrangler secret put WORKER_SHARED_SECRET
+```

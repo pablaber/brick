@@ -227,6 +227,25 @@
 					<span>Scope</span>
 					<strong>{data.strava.scope ?? 'Not provided'}</strong>
 				</li>
+				<li class="list-item">
+					<span>Last Sync Type</span>
+					<strong>{data.latestSyncRun?.sync_type ?? 'Never'}</strong>
+				</li>
+				<li class="list-item">
+					<span>Last Sync Status</span>
+					{#if data.latestSyncRun}
+						<span
+							class="status-bubble status-inline"
+							class:status-success={data.latestSyncRun.status === 'success'}
+							class:status-error={data.latestSyncRun.status === 'failed'}
+							class:status-running={data.latestSyncRun.status === 'running' || data.latestSyncRun.status === 'in_progress'}
+						>
+							{data.latestSyncRun.status}
+						</span>
+					{:else}
+						<strong>Never</strong>
+					{/if}
+				</li>
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<li
 					class="list-item"
@@ -243,16 +262,6 @@
 						{/if}
 					</span>
 					<span class="last-synced-value">
-						{#if data.latestSyncRun}
-							<span
-								class="status-bubble status-inline"
-								class:status-success={data.latestSyncRun.status === 'success'}
-								class:status-error={data.latestSyncRun.status === 'failed'}
-								class:status-running={data.latestSyncRun.status === 'running' || data.latestSyncRun.status === 'in_progress'}
-							>
-								{data.latestSyncRun.status}
-							</span>
-						{/if}
 						{#if formatDate(data.strava.last_synced_at)}
 							<span class="date-display">
 								<span class="date-label">{formatDate(data.strava.last_synced_at)?.date}</span>
@@ -293,12 +302,43 @@
 						<span>Activities Checked</span>
 						<strong>{data.latestSyncRun.activities_fetched ?? '0'}</strong>
 					</li>
+					<li class="list-item">
+						<span>Activities Upserted</span>
+						<strong>{data.latestSyncRun.activities_upserted ?? '0'}</strong>
+					</li>
 					{#if data.latestSyncRun.error}
 						<li class="list-item">
 							<span>Latest Sync Error</span>
 							<strong>{data.latestSyncRun.error}</strong>
 						</li>
 					{/if}
+				</ul>
+			{/if}
+
+			{#if data.latestManualSyncRun || data.latestScheduledSyncRun}
+				<ul class="list">
+					<li class="list-item">
+						<span>Last Manual Sync</span>
+						{#if formatDate(data.latestManualSyncRun?.started_at)}
+							<span class="date-display">
+								<span class="date-label">{formatDate(data.latestManualSyncRun?.started_at)?.date}</span>
+								<span class="date-time">{formatDate(data.latestManualSyncRun?.started_at)?.time}</span>
+							</span>
+						{:else}
+							<strong>Never</strong>
+						{/if}
+					</li>
+					<li class="list-item">
+						<span>Last Scheduled Sync</span>
+						{#if formatDate(data.latestScheduledSyncRun?.started_at)}
+							<span class="date-display">
+								<span class="date-label">{formatDate(data.latestScheduledSyncRun?.started_at)?.date}</span>
+								<span class="date-time">{formatDate(data.latestScheduledSyncRun?.started_at)?.time}</span>
+							</span>
+						{:else}
+							<strong>Never</strong>
+						{/if}
+					</li>
 				</ul>
 			{/if}
 
