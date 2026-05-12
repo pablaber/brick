@@ -225,11 +225,7 @@ export const load: PageServerLoad = async (event) => {
   oneYearAgo.setUTCFullYear(oneYearAgo.getUTCFullYear() - 1);
   const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
   for (const row of weeklyActivityBreakdown) {
-    if (
-      row.sport_type &&
-      row.total_moving_minutes &&
-      (row.period_start ?? '') >= oneYearAgoStr
-    ) {
+    if (row.sport_type && row.total_moving_minutes && (row.period_start ?? '') >= oneYearAgoStr) {
       sportTotals.set(
         row.sport_type,
         (sportTotals.get(row.sport_type) ?? 0) + row.total_moving_minutes
