@@ -167,16 +167,69 @@ CREATE TABLE IF NOT EXISTS "public"."sync_runs" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
     "status" "text" NOT NULL,
+    "sync_type" "text" DEFAULT 'manual'::"text" NOT NULL,
     "started_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "completed_at" timestamp with time zone,
     "activities_fetched" integer,
+    "activities_upserted" integer,
     "error" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "sync_runs_status_check" CHECK (("status" = ANY (ARRAY['running'::"text", 'success'::"text", 'failed'::"text"])))
+    CONSTRAINT "sync_runs_status_check" CHECK (("status" = ANY (ARRAY['running'::"text", 'success'::"text", 'failed'::"text"]))),
+    CONSTRAINT "sync_runs_sync_type_check" CHECK (("sync_type" = ANY (ARRAY['manual'::"text", 'scheduled'::"text"])))
 );
 
 
 ALTER TABLE "public"."sync_runs" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_sport_category_settings" (
+    "user_id" "uuid" NOT NULL,
+    "category" "text" NOT NULL,
+    "color_hex" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "user_sport_category_settings_category_check" CHECK (("category" = ANY (ARRAY['running'::"text", 'cycling'::"text", 'swimming'::"text", 'other'::"text"]))),
+    CONSTRAINT "user_sport_category_settings_color_hex_check" CHECK (("color_hex" ~ '^#[0-9A-F]{6}$'::"text"))
+);
+
+
+ALTER TABLE "public"."user_sport_category_settings" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_goals" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "goal_type" "text" NOT NULL,
+    "sport_category" "text",
+    "target_value" numeric NOT NULL,
+    "unit" "text" NOT NULL,
+    "period" "text" NOT NULL,
+    "starts_on" date,
+    "ends_on" date,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "user_goals_check" CHECK ((("starts_on" IS NULL) OR ("ends_on" IS NULL) OR ("ends_on" >= "starts_on"))),
+    CONSTRAINT "user_goals_goal_type_check" CHECK (("goal_type" = ANY (ARRAY['yearly_running_distance'::"text", 'weekly_workout_minutes'::"text"]))),
+    CONSTRAINT "user_goals_period_check" CHECK (("period" = ANY (ARRAY['weekly'::"text", 'monthly'::"text", 'yearly'::"text"]))),
+    CONSTRAINT "user_goals_sport_category_check" CHECK (("sport_category" = ANY (ARRAY['running'::"text", 'cycling'::"text", 'swimming'::"text", 'other'::"text"]))),
+    CONSTRAINT "user_goals_target_value_check" CHECK (("target_value" > (0)::numeric)),
+    CONSTRAINT "user_goals_unit_check" CHECK (("unit" = ANY (ARRAY['miles'::"text", 'minutes'::"text"])))
+);
+
+
+ALTER TABLE "public"."user_goals" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_dashboard_preferences" (
+    "user_id" "uuid" NOT NULL,
+    "preferences" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."user_dashboard_preferences" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."activities"
@@ -213,6 +266,20 @@ ALTER TABLE ONLY "public"."sync_runs"
     ADD CONSTRAINT "sync_runs_pkey" PRIMARY KEY ("id");
 
 
+ALTER TABLE ONLY "public"."user_dashboard_preferences"
+    ADD CONSTRAINT "user_dashboard_preferences_pkey" PRIMARY KEY ("user_id");
+
+
+
+ALTER TABLE ONLY "public"."user_goals"
+    ADD CONSTRAINT "user_goals_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."user_sport_category_settings"
+    ADD CONSTRAINT "user_sport_category_settings_pkey" PRIMARY KEY ("user_id", "category");
+
+
 
 CREATE INDEX "activities_user_sport_type_start_date_idx" ON "public"."activities" USING "btree" ("user_id", "sport_type", "start_date" DESC);
 
@@ -242,6 +309,10 @@ CREATE INDEX "sync_runs_user_started_at_idx" ON "public"."sync_runs" USING "btre
 
 
 
+CREATE INDEX "user_goals_user_goal_type_active_idx" ON "public"."user_goals" USING "btree" ("user_id", "goal_type", "is_active");
+
+
+
 CREATE OR REPLACE TRIGGER "activities_set_updated_at" BEFORE UPDATE ON "public"."activities" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
@@ -251,6 +322,18 @@ CREATE OR REPLACE TRIGGER "profiles_set_updated_at" BEFORE UPDATE ON "public"."p
 
 
 CREATE OR REPLACE TRIGGER "strava_connections_set_updated_at" BEFORE UPDATE ON "public"."strava_connections" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "user_dashboard_preferences_set_updated_at" BEFORE UPDATE ON "public"."user_dashboard_preferences" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "user_goals_set_updated_at" BEFORE UPDATE ON "public"."user_goals" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "user_sport_category_settings_set_updated_at" BEFORE UPDATE ON "public"."user_sport_category_settings" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
 
@@ -279,7 +362,42 @@ ALTER TABLE ONLY "public"."sync_runs"
 
 
 
+ALTER TABLE ONLY "public"."user_dashboard_preferences"
+    ADD CONSTRAINT "user_dashboard_preferences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_goals"
+    ADD CONSTRAINT "user_goals_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_sport_category_settings"
+    ADD CONSTRAINT "user_sport_category_settings_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 CREATE POLICY "Users can insert their own profile" ON "public"."profiles" FOR INSERT TO "authenticated" WITH CHECK (((SELECT "auth"."uid"()) = "id"));
+
+
+
+CREATE POLICY "Users can delete their own dashboard preferences" ON "public"."user_dashboard_preferences" FOR DELETE TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can delete their own goals" ON "public"."user_goals" FOR DELETE TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can delete their own sport category settings" ON "public"."user_sport_category_settings" FOR DELETE TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can insert their own dashboard preferences" ON "public"."user_dashboard_preferences" FOR INSERT TO "authenticated" WITH CHECK (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can insert their own goals" ON "public"."user_goals" FOR INSERT TO "authenticated" WITH CHECK (((SELECT "auth"."uid"()) = "user_id"));
 
 
 
@@ -295,11 +413,39 @@ CREATE POLICY "Users can select their own profile" ON "public"."profiles" FOR SE
 
 
 
+CREATE POLICY "Users can insert their own sport category settings" ON "public"."user_sport_category_settings" FOR INSERT TO "authenticated" WITH CHECK (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can select their own dashboard preferences" ON "public"."user_dashboard_preferences" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can select their own goals" ON "public"."user_goals" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can select their own sport category settings" ON "public"."user_sport_category_settings" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
 CREATE POLICY "Users can select their own sync runs" ON "public"."sync_runs" FOR SELECT TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id"));
 
 
 
 CREATE POLICY "Users can update their own profile" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (((SELECT "auth"."uid"()) = "id")) WITH CHECK (((SELECT "auth"."uid"()) = "id"));
+
+
+
+CREATE POLICY "Users can update their own dashboard preferences" ON "public"."user_dashboard_preferences" FOR UPDATE TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id")) WITH CHECK (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own goals" ON "public"."user_goals" FOR UPDATE TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id")) WITH CHECK (((SELECT "auth"."uid"()) = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own sport category settings" ON "public"."user_sport_category_settings" FOR UPDATE TO "authenticated" USING (((SELECT "auth"."uid"()) = "user_id")) WITH CHECK (((SELECT "auth"."uid"()) = "user_id"));
 
 
 
@@ -316,6 +462,15 @@ ALTER TABLE "public"."strava_connections" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."sync_runs" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_dashboard_preferences" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_goals" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_sport_category_settings" ENABLE ROW LEVEL SECURITY;
 
 
 REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;
@@ -397,6 +552,21 @@ GRANT SELECT ON TABLE "public"."sync_runs" TO "authenticated";
 
 
 
+GRANT ALL ON TABLE "public"."user_dashboard_preferences" TO "service_role";
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."user_dashboard_preferences" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."user_goals" TO "service_role";
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."user_goals" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."user_sport_category_settings" TO "service_role";
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."user_sport_category_settings" TO "authenticated";
+
+
+
 GRANT ALL ON TABLE "public"."yearly_activity_breakdown" TO "service_role";
 GRANT SELECT ON TABLE "public"."yearly_activity_breakdown" TO "authenticated";
 
@@ -420,7 +590,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
 
 
 

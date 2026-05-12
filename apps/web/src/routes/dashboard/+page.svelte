@@ -221,8 +221,13 @@
 										<path d={runningSpark.line} class="sparkline-line sparkline-running-line" />
 										{#if runningHover !== null}
 											{@const currentPoint = runningHover < runningCoords.length ? runningCoords[runningHover] : null}
+											{@const currentProgress = runningHover < data.charts.runningProgress.length ? data.charts.runningProgress[runningHover] : null}
+											{@const goalMiles = goalMilesAtDate(runningGoalTarget, currentProgress?.date ?? null)}
 											{#if currentPoint}
 												<line x1={currentPoint.x} y1="0" x2={currentPoint.x} y2={SVG_H} class="sparkline-cursor" />
+												{#if goalMiles !== null}
+													<circle cx={currentPoint.x} cy={milesToY(goalMiles, runningSparkMax)} r="4" class="sparkline-dot dot-goal-stroke" />
+												{/if}
 												<circle cx={currentPoint.x} cy={currentPoint.y} r="4" class="sparkline-dot dot-running-stroke" />
 											{/if}
 										{/if}
@@ -234,15 +239,22 @@
 									{@const goalMiles = goalMilesAtDate(runningGoalTarget, currentProgress?.date ?? null)}
 									{#if currentPoint && currentProgress}
 									<div class="sparkline-tip" style="left: {(currentPoint.x / runningSparkWidth) * 100}%">
+										<div class="sparkline-tip-header">{formatWeek(currentProgress.date)}</div>
+										<div class="sparkline-tip-row">
+												<span class="sparkline-tip-label"><span class="tooltip-dot dot-running"></span>Current</span>
+											<strong>{formatMiles(currentProgress.miles)}</strong>
+										</div>
 										{#if goalMiles !== null}
+											{@const goalDelta = currentProgress.miles - goalMiles}
 											<div class="sparkline-tip-row">
-												<strong>Goal {formatMiles(goalMiles)}</strong>
+												<span class="sparkline-tip-label"><span class="tooltip-dot dot-goal"></span>Goal</span>
+												<span>{formatMiles(goalMiles)}</span>
+											</div>
+											<div class="sparkline-tip-row">
+													<span class="sparkline-tip-label">{goalDelta >= 0 ? 'Ahead of Goal -' : 'Behind Goal'}</span>
+												<span>{formatMiles(Math.abs(goalDelta))}</span>
 											</div>
 										{/if}
-										<div class="sparkline-tip-row">
-											<span>Current {formatMiles(currentProgress.miles)}</span>
-										</div>
-										<span>{formatWeek(currentProgress.date)}</span>
 									</div>
 									{/if}
 								{/if}
@@ -593,6 +605,10 @@
 		stroke: var(--color-running);
 	}
 
+	.dot-goal-stroke {
+		stroke: var(--text-muted);
+	}
+
 	.dot-cycling-stroke {
 		stroke: var(--color-cycling);
 	}
@@ -610,19 +626,34 @@
 		pointer-events: none;
 		z-index: 20;
 		display: flex;
-		gap: 6px;
-		align-items: baseline;
+		flex-direction: column;
+		gap: 2px;
+		align-items: stretch;
 	}
 
-	.sparkline-tip span {
+	.sparkline-tip-header {
 		color: #94a3b8;
 		font-size: 0.62rem;
+		font-weight: 400;
 	}
 
 	.sparkline-tip-row {
 		display: flex;
-		align-items: baseline;
-		gap: 0.25rem;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		font-size: 0.68rem;
+	}
+
+	.sparkline-tip-row > :last-child {
+		padding-left: 4px;
+	}
+
+	.sparkline-tip-label {
+		color: #94a3b8;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 
 	.sparkline-running {
@@ -736,6 +767,10 @@
 
 	.dot-other {
 		background: var(--color-other);
+	}
+
+	.dot-goal {
+		background: var(--text-muted);
 	}
 
 	/* Simple text tooltip (monthly/yearly charts) */
