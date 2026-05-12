@@ -159,10 +159,11 @@
 
 				syncProgressFetched = body.totalActivitiesFetched ?? syncProgressFetched;
 				if (body.estimatedTotalActivities != null) {
-					estimatedTotalActivities = Math.max(
-						estimatedTotalActivities ?? 0,
-						inflateEstimatedActivityTotal(body.estimatedTotalActivities)
-					);
+					const normalizedEstimatedTotal = Math.max(1, Math.floor(body.estimatedTotalActivities));
+					estimatedTotalActivities =
+						estimatedTotalActivities == null
+							? inflateEstimatedActivityTotal(normalizedEstimatedTotal)
+							: Math.max(estimatedTotalActivities, normalizedEstimatedTotal);
 				}
 				syncProgressTotal =
 					estimatedTotalActivities != null
