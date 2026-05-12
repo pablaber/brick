@@ -68,7 +68,13 @@ vi.mock('./lib/strava-oauth.js', () => {
   };
 });
 
-import app from './index.js';
+const scheduledSpy = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+
+vi.mock('./lib/scheduled-sync.js', () => ({
+  runScheduledSync: scheduledSpy
+}));
+
+import worker from './index.js';
 
 const env = {
   SUPABASE_URL: 'http://127.0.0.1:54321',
@@ -90,7 +96,7 @@ describe('strava worker routes', () => {
   });
 
   it('GET /health returns a healthy response', async () => {
-    const response = await app.request('/health', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/health'), env, {} as ExecutionContext);
     const body = await response.json<{
       ok: boolean;
       service: string;
@@ -102,13 +108,13 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/connect rejects missing token', async () => {
-    const response = await app.request('/strava/connect', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/strava/connect'), env, {} as ExecutionContext);
 
     expect(response.status).toBe(400);
   });
 
   it('GET /strava/connect rejects invalid signed token', async () => {
-    const response = await app.request('/strava/connect?token=invalid-token', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/strava/connect?token=invalid-token'), env, {} as ExecutionContext);
 
     expect(response.status).toBe(401);
   });
@@ -124,10 +130,10 @@ describe('strava worker routes', () => {
       },
       env.WORKER_SHARED_SECRET
     );
-    const response = await app.request(
-      `/strava/connect?token=${encodeURIComponent(token)}`,
-      undefined,
-      env
+    const response = await worker.fetch(
+      new Request(`http://localhost/strava/connect?token=${encodeURIComponent(token)}`),
+      env,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(302);
@@ -135,7 +141,7 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/callback rejects missing state', async () => {
-    const response = await app.request('/strava/callback?code=test-code', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/strava/callback?code=test-code'), env, {} as ExecutionContext);
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
@@ -144,7 +150,7 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/callback rejects missing code', async () => {
-    const response = await app.request('/strava/callback?state=test-state', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/strava/callback?state=test-state'), env, {} as ExecutionContext);
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('http://localhost:5173/settings?strava=error');
@@ -159,11 +165,7 @@ describe('strava worker routes', () => {
       expires_at: new Date(Date.now() - 1_000).toISOString(),
       used_at: null
     };
-    const response = await app.request(
-      '/strava/callback?state=expired-state&code=test-code',
-      undefined,
-      env
-    );
+    const response = await worker.fetch(new Request('http://localhost/strava/callback?state=expired-state&code=test-code'), env, {} as ExecutionContext);
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
@@ -172,14 +174,14 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/callback handles Strava denial', async () => {
-    const response = await app.request('/strava/callback?error=access_denied', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/strava/callback?error=access_denied'), env, {} as ExecutionContext);
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('http://localhost:5173/settings?strava=denied');
   });
 
   it('returns a JSON 404 for unknown routes', async () => {
-    const response = await app.request('/unknown', undefined, env);
+    const response = await worker.fetch(new Request('http://localhost/unknown'), env, {} as ExecutionContext);
     const body = await response.json<{
       ok: boolean;
       error: string;
@@ -188,5 +190,21 @@ describe('strava worker routes', () => {
     expect(response.status).toBe(404);
     expect(body.ok).toBe(false);
     expect(body.error).toBe('Not found');
+  });
+
+  it('scheduled handler calls runScheduledSync', async () => {
+    const waitUntil = vi.fn();
+    await worker.scheduled(
+      {
+        cron: '0 */6 * * *',
+        scheduledTime: Date.now(),
+        type: 'scheduled'
+      } as unknown as ScheduledController,
+      env,
+      { waitUntil } as unknown as ExecutionContext
+    );
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(scheduledSpy).toHaveBeenCalledTimes(1);
   });
 });

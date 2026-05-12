@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:scheduled": "wrangler dev --test-scheduled",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "deploy": "wrangler deploy",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:scheduled": "node scripts/test-scheduled-sync.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

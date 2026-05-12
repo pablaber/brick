@@ -1,7 +1,18 @@
+# Supabase project URL used by the worker for DB/API access.
 SUPABASE_URL=
+# Supabase service role key used by the worker for privileged DB writes.
 SUPABASE_SERVICE_ROLE_KEY=
+# Strava OAuth app client ID used for token exchange.
 STRAVA_CLIENT_ID=
+# Strava OAuth app client secret used for token exchange and refresh.
 STRAVA_CLIENT_SECRET=
+# Redirect URI registered in the Strava app for OAuth callbacks.
 STRAVA_REDIRECT_URI=http://localhost:8787/strava/callback
+# Base URL of the web app for post-auth redirects.
 APP_URL=http://localhost:5173
+# Shared signing secret between web app and worker for secure internal tokens.
 WORKER_SHARED_SECRET=
+# Minimum hours between automatic scheduled sync attempts per user.
+STRAVA_SCHEDULED_SYNC_MIN_INTERVAL_HOURS=6
+# Max users processed in a single scheduled sync run.
+STRAVA_SCHEDULED_SYNC_LIMIT=25

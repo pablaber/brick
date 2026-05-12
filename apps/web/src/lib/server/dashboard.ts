@@ -34,7 +34,7 @@ export async function getStravaConnectionStatus(supabase: Supabase, userId: stri
 export async function getLatestSyncRun(supabase: Supabase, userId: string) {
   const { data, error } = await supabase
     .from('sync_runs')
-    .select('status, started_at, completed_at, activities_fetched, error')
+    .select('status, sync_type, started_at, completed_at, activities_fetched, error')
     .eq('user_id', userId)
     .order('started_at', { ascending: false })
     .limit(1)
@@ -43,6 +43,7 @@ export async function getLatestSyncRun(supabase: Supabase, userId: string) {
   if (!data) return null;
   return {
     status: data.status,
+    syncType: data.sync_type,
     startedAt: data.started_at,
     completedAt: data.completed_at ?? null,
     activitiesFetched: data.activities_fetched ?? null,

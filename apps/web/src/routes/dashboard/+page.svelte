@@ -29,7 +29,9 @@
 	<header class="page-header">
 		<h1 class="page-title">Dashboard</h1>
 		{#if data.latestSyncRun?.completedAt}
-			<p class="page-subtitle">Last synced {formatDate(data.latestSyncRun.completedAt)}</p>
+			<p class="page-subtitle">
+				Last {data.latestSyncRun.syncType} sync {formatDate(data.latestSyncRun.completedAt)}
+			</p>
 		{:else}
 			<p class="page-subtitle">Your workout dashboard</p>
 		{/if}
@@ -81,9 +83,9 @@
 				<p class="metric metric-sm">{data.stats.lastSyncedAt ? formatDate(data.stats.lastSyncedAt) : '—'}</p>
 				<p class="metric-caption">
 					{#if data.latestSyncRun.status === 'success'}
-						{data.latestSyncRun.activitiesFetched ?? 0} activities checked
+						{data.latestSyncRun.activitiesFetched ?? 0} activities checked ({data.latestSyncRun.syncType})
 					{:else}
-						Status: {data.latestSyncRun.status}
+						Status: {data.latestSyncRun.status} ({data.latestSyncRun.syncType})
 					{/if}
 				</p>
 			</article>

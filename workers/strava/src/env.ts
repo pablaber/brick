@@ -6,4 +6,6 @@ export type Env = {
   STRAVA_REDIRECT_URI: string;
   APP_URL: string;
   WORKER_SHARED_SECRET: string;
+  STRAVA_SCHEDULED_SYNC_MIN_INTERVAL_HOURS?: string;
+  STRAVA_SCHEDULED_SYNC_LIMIT?: string;
 };
