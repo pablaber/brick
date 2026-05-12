@@ -17,6 +17,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 const STRAVA_RESULTS = new Set(['connected', 'denied', 'invalid_state', 'error']);
 const SYNC_RESULTS = new Set(['success', 'error', 'running', 'not_connected']);
+const DISPLAY_NAME_MAX_LENGTH = 80;
 
 export const load: PageServerLoad = async (event) => {
   const user = await requireUser(event);
@@ -135,6 +136,47 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+  saveDisplayName: async (event) => {
+    const user = await requireUser(event);
+    const formData = await event.request.formData();
+    const displayNameInput = formData.get('displayName')?.toString() ?? '';
+    const displayName = displayNameInput.trim();
+
+    if (displayName.length > DISPLAY_NAME_MAX_LENGTH) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'profile',
+          error: `Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer.`
+        }
+      });
+    }
+
+    const { error } = await event.locals.supabase.from('profiles').upsert(
+      {
+        id: user.id,
+        display_name: displayName.length > 0 ? displayName : null
+      },
+      { onConflict: 'id' }
+    );
+
+    if (error) {
+      console.error('Unable to save display name', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'profile',
+          error: 'Unable to save display name right now.'
+        }
+      });
+    }
+
+    return {
+      settingsForm: {
+        scope: 'profile',
+        success: 'Display name saved.'
+      }
+    };
+  },
+
   saveSportColors: async (event) => {
     const user = await requireUser(event);
     const formData = await event.request.formData();

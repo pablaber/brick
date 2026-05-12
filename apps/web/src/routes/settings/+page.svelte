@@ -6,7 +6,7 @@
 
 	let { data, form } = $props();
 	type SettingsFormFeedback = {
-		scope: 'colors' | 'goals';
+		scope: 'profile' | 'colors' | 'goals';
 		error?: string;
 		success?: string;
 		goalType?: string;
@@ -23,6 +23,9 @@
 	let colorsOpen = $state(false);
 	let goalsOpen = $state(false);
 	let stravaOpen = $state(untrack(() => !data.strava.connected));
+	let displayNameEditing = $state(false);
+	let displayNameValue = $state(untrack(() => data.displayName ?? ''));
+	let displayNameSaving = $state(false);
 
 	let colorValues = $state(untrack(() => ({ ...data.settings.colors })));
 	let colorSaving = $state(false);
@@ -236,9 +239,74 @@
 				<span>Email</span>
 				<strong>{data.email}</strong>
 			</li>
-			<li class="list-item">
+			<li class="list-item display-name-row">
 				<span>Display Name</span>
-				<strong>{data.displayName ?? 'Not set'}</strong>
+				<div class="display-name-area">
+					{#if displayNameEditing}
+						<form
+							method="POST"
+							action="?/saveDisplayName"
+							class="display-name-form"
+							use:enhance={() => {
+								displayNameSaving = true;
+								return async ({ result, update }) => {
+									await update({ reset: false });
+									displayNameSaving = false;
+
+									const settingsFeedback = (result as { data?: { settingsForm?: SettingsFormFeedback } })
+										.data?.settingsForm;
+
+									if (result.type === 'success') {
+										displayNameEditing = false;
+										showToast(settingsFeedback?.success ?? 'Display name saved.', 'success');
+									} else if (result.type === 'failure') {
+										showToast(settingsFeedback?.error ?? 'Unable to save display name right now.', 'error');
+									} else if (result.type === 'error') {
+										showToast('Unable to save display name right now.', 'error');
+									}
+								};
+							}}
+						>
+							<input
+								class="text-input display-name-input"
+								type="text"
+								name="displayName"
+								maxlength={80}
+								placeholder="Enter display name"
+								bind:value={displayNameValue}
+							/>
+							<button type="submit" class="primary-button" disabled={displayNameSaving}>
+								{displayNameSaving ? 'Saving…' : 'Save'}
+							</button>
+							<button
+								type="button"
+								class="secondary-button"
+								disabled={displayNameSaving}
+								onclick={() => {
+									displayNameEditing = false;
+									displayNameValue = data.displayName ?? '';
+								}}
+							>
+								Cancel
+							</button>
+						</form>
+					{:else}
+						<div class="display-name-static">
+							<strong>{data.displayName ?? 'Not set'}</strong>
+							<button
+								type="button"
+								class="icon-button"
+								aria-label="Edit display name"
+								onclick={() => {
+									displayNameEditing = true;
+									displayNameValue = data.displayName ?? '';
+								}}
+							>
+								&#9998;
+							</button>
+						</div>
+					{/if}
+				</div>
 			</li>
 		</ul>
 	</div>
@@ -599,6 +667,56 @@
 
 	.card-sectioned > :last-child:not(.card-heading) {
 		padding-bottom: 1rem;
+	}
+
+	.display-name-row {
+		align-items: center;
+	}
+
+	.display-name-area {
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		min-width: 0;
+	}
+
+	.display-name-form {
+		display: inline-flex;
+		flex-wrap: nowrap;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.display-name-input {
+		width: clamp(10rem, 16vw, 14rem);
+	}
+
+	.display-name-static {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.icon-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.85rem;
+		height: 1.85rem;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: #fff;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.95rem;
+		line-height: 1;
+	}
+
+	.icon-button:hover {
+		background: var(--surface-subtle);
+		color: var(--text);
+		border-color: var(--text-muted);
 	}
 
 	.settings-block {

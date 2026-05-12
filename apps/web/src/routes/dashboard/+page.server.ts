@@ -89,41 +89,53 @@ export const load: PageServerLoad = async (event) => {
 
   // Cumulative weekly miles for current year (running + cycling)
   const metersToMiles = (m: number) => m * 0.000621371;
-  const weeklyRunningMilesMap = new Map<string, number>();
-  const weeklyCyclingMilesMap = new Map<string, number>();
+  const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+  const currentYearNumber = new Date().getUTCFullYear();
+  const yearStartUtc = new Date(Date.UTC(currentYearNumber, 0, 1));
+  const yearStartDow = yearStartUtc.getUTCDay();
+  const firstWeekStartUtc = new Date(yearStartUtc);
+  firstWeekStartUtc.setUTCDate(firstWeekStartUtc.getUTCDate() - ((yearStartDow + 6) % 7));
+
+  const today = new Date();
+  const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const currentWeekIdx = Math.max(
+    0,
+    Math.floor((todayUtc.getTime() - firstWeekStartUtc.getTime()) / MS_PER_WEEK)
+  );
+
+  function weekIndexFromIsoDate(dateStr: string): number {
+    const dateUtc = new Date(`${dateStr}T00:00:00Z`);
+    return Math.floor((dateUtc.getTime() - firstWeekStartUtc.getTime()) / MS_PER_WEEK);
+  }
+
+  function weekStartIsoForIndex(idx: number): string {
+    const d = new Date(firstWeekStartUtc);
+    d.setUTCDate(d.getUTCDate() + idx * 7);
+    return d.toISOString().split('T')[0];
+  }
+
+  const weeklyRunningMilesMap = new Map<number, number>();
+  const weeklyCyclingMilesMap = new Map<number, number>();
   for (const row of weeklySportBreakdown) {
-    if (!row.week_start?.startsWith(currentYear) || !row.total_distance_meters) continue;
+    if (!row.week_start || !row.total_distance_meters) continue;
+    const weekIdx = weekIndexFromIsoDate(row.week_start);
+    if (weekIdx < 0 || weekIdx > currentWeekIdx) continue;
+
     const sport = row.sport_type ?? '';
     const miles = metersToMiles(row.total_distance_meters);
     if (runningSports.has(sport)) {
-      weeklyRunningMilesMap.set(
-        row.week_start,
-        (weeklyRunningMilesMap.get(row.week_start) ?? 0) + miles
-      );
+      weeklyRunningMilesMap.set(weekIdx, (weeklyRunningMilesMap.get(weekIdx) ?? 0) + miles);
     } else if (cyclingSports.has(sport)) {
-      weeklyCyclingMilesMap.set(
-        row.week_start,
-        (weeklyCyclingMilesMap.get(row.week_start) ?? 0) + miles
-      );
+      weeklyCyclingMilesMap.set(weekIdx, (weeklyCyclingMilesMap.get(weekIdx) ?? 0) + miles);
     }
   }
 
-  function buildFullYearProgress(weekMap: Map<string, number>) {
-    const yearStart = new Date(`${currentYear}-01-01`);
-    const dow = yearStart.getDay();
-    const firstMonday = new Date(yearStart);
-    firstMonday.setDate(firstMonday.getDate() - ((dow + 6) % 7));
-
-    const now = new Date();
+  function buildFullYearProgress(weekMap: Map<number, number>) {
     const points: { week: string; miles: number }[] = [];
     let cumulative = 0;
-    const d = new Date(firstMonday);
-
-    while (d <= now) {
-      const weekStr = d.toISOString().split('T')[0];
-      cumulative += weekMap.get(weekStr) ?? 0;
-      points.push({ week: weekStr, miles: cumulative });
-      d.setDate(d.getDate() + 7);
+    for (let idx = 0; idx <= currentWeekIdx; idx += 1) {
+      cumulative += weekMap.get(idx) ?? 0;
+      points.push({ week: weekStartIsoForIndex(idx), miles: cumulative });
     }
 
     return points;
