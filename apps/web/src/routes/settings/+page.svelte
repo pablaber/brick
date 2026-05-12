@@ -57,6 +57,10 @@
 			dirty = true;
 		}
 
+		if (settingsForm?.scope === 'colors' && settingsForm.success) {
+			showToast(settingsForm.success, 'success');
+		}
+
 		if (dirty) {
 			window.history.replaceState({}, '', url.toString());
 		}
@@ -230,9 +234,6 @@
 			<p class="metric-caption">Customize dashboard category colors.</p>
 			{#if settingsForm?.scope === 'colors' && settingsForm.error}
 				<p class="form-error">{settingsForm.error}</p>
-			{/if}
-			{#if settingsForm?.scope === 'colors' && settingsForm.success}
-				<p class="note note-success">{settingsForm.success}</p>
 			{/if}
 			<form method="POST" action="?/saveSportColors" class="form-stack compact-form">
 				<div class="color-grid">
