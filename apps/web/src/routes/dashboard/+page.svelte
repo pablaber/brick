@@ -3,6 +3,7 @@
 	import PoweredByStrava from '$lib/components/PoweredByStrava.svelte';
 	import TrainingDurationThisWeekCard from '$lib/components/dashboard/TrainingDurationThisWeekCard.svelte';
 	import YearlyDistanceGoalCard from '$lib/components/dashboard/YearlyDistanceGoalCard.svelte';
+	import { slide } from 'svelte/transition';
 	import {
 		formatDate,
 		formatMetersAsMiles,
@@ -42,6 +43,13 @@
 		return 'other';
 	}
 
+	function sportBreakdownBarClass(sportType: string | null | undefined): string {
+		return `breakdown-bar-fill-${activityCategory(sportType)}`;
+	}
+
+	const SPORT_BREAKDOWN_TOP_COUNT = 9;
+	let sportBreakdownExpanded = $state(false);
+
 	function weekStartKey(date: Date): string {
 		const daysSinceMonday = (date.getUTCDay() + 6) % 7;
 		const weekStartUtcMillis = Date.UTC(
@@ -55,6 +63,23 @@
 	const weeklyMax = $derived(Math.max(...data.charts.weeklyMinutes.map((d) => d.minutes), 1));
 	const monthlyMax = $derived(Math.max(...data.charts.monthlyDistance.map((d) => d.miles), 1));
 	const yearlyMax = $derived(Math.max(...data.charts.yearlyDistance.map((d) => d.miles), 1));
+	const sportBreakdownTop = $derived(
+		data.charts.sportBreakdown.slice(0, SPORT_BREAKDOWN_TOP_COUNT)
+	);
+	const sportBreakdownOverflow = $derived(
+		data.charts.sportBreakdown.slice(SPORT_BREAKDOWN_TOP_COUNT)
+	);
+	const sportBreakdownOverflowMinutes = $derived(
+		sportBreakdownOverflow.reduce((sum, item) => sum + item.minutes, 0)
+	);
+	const sportBreakdownTotalMinutes = $derived(
+		data.charts.sportBreakdown.reduce((sum, item) => sum + item.minutes, 0)
+	);
+	const sportBreakdownOverflowPct = $derived(
+		sportBreakdownTotalMinutes > 0
+			? Math.round((sportBreakdownOverflowMinutes / sportBreakdownTotalMinutes) * 100)
+			: 0
+	);
 	const weeklyMonthLabelWeeks = $derived(
 		new Set(
 			data.charts.weeklyMinutes
@@ -230,21 +255,70 @@
 				<article class="card">
 					<h3>Sport Breakdown</h3>
 					<p class="metric-caption" style="margin-bottom: 0.75rem">
-						Past 16 weeks by training minutes
+						Past 1 year by training minutes
 					</p>
 					<ul class="list">
-						{#each data.charts.sportBreakdown as item (item.sport)}
+						{#each sportBreakdownTop as item (item.sport)}
 							<li class="list-item">
 								<span>{formatSportType(item.sport)}</span>
 								<div class="breakdown-right">
 									<div class="breakdown-bar-track">
-										<div class="breakdown-bar-fill" style="width: {item.pct}%"></div>
+										<div
+											class={`breakdown-bar-fill ${sportBreakdownBarClass(item.sport)}`}
+											style="width: {item.pct}%"
+										></div>
 									</div>
 									<strong class="breakdown-pct">{item.pct}%</strong>
 								</div>
 							</li>
 						{/each}
+						{#if sportBreakdownOverflow.length > 0}
+							<li class="list-item list-item-expandable-other">
+								<button
+									type="button"
+									class="breakdown-expand-trigger"
+									aria-expanded={sportBreakdownExpanded}
+									onclick={() => {
+										sportBreakdownExpanded = !sportBreakdownExpanded;
+									}}
+								>
+									<span class="breakdown-expand-label">
+										Other
+										<span class="breakdown-expand-hint">
+											{sportBreakdownExpanded ? 'Click to collapse' : 'Click to expand'}
+										</span>
+									</span>
+									<div class="breakdown-right">
+										<div class="breakdown-bar-track">
+											<div
+												class="breakdown-bar-fill breakdown-bar-fill-other"
+												style="width: {sportBreakdownOverflowPct}%"
+											></div>
+										</div>
+										<strong class="breakdown-pct">{sportBreakdownOverflowPct}%</strong>
+									</div>
+								</button>
+							</li>
+						{/if}
 					</ul>
+					{#if sportBreakdownExpanded && sportBreakdownOverflow.length > 0}
+						<ul class="list breakdown-expanded-list" transition:slide={{ duration: 200 }}>
+							{#each sportBreakdownOverflow as item (item.sport)}
+								<li class="list-item breakdown-sub-item">
+									<span>{formatSportType(item.sport)}</span>
+									<div class="breakdown-right">
+										<div class="breakdown-bar-track">
+											<div
+												class={`breakdown-bar-fill ${sportBreakdownBarClass(item.sport)}`}
+												style="width: {item.pct}%"
+											></div>
+										</div>
+										<strong class="breakdown-pct">{item.pct}%</strong>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</article>
 			{/if}
 
@@ -569,15 +643,78 @@
 
 	.breakdown-bar-fill {
 		height: 100%;
-		background: var(--brand);
 		border-radius: 999px;
 		opacity: 0.7;
+	}
+
+	.breakdown-bar-fill-running {
+		background: var(--color-running);
+	}
+
+	.breakdown-bar-fill-cycling {
+		background: var(--color-cycling);
+	}
+
+	.breakdown-bar-fill-swimming {
+		background: var(--color-swimming);
+	}
+
+	.breakdown-bar-fill-other {
+		background: var(--color-other);
 	}
 
 	.breakdown-pct {
 		font-size: 0.85rem;
 		min-width: 2.5rem;
 		text-align: right;
+	}
+
+	.list-item-expandable-other {
+		padding-bottom: 0.2rem;
+	}
+
+	.breakdown-expand-trigger {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		width: 100%;
+		border: 0;
+		background: transparent;
+		padding: 0;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.breakdown-expand-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
+	.breakdown-expand-hint {
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		opacity: 0;
+		transition: opacity 120ms ease;
+	}
+
+	.breakdown-expand-trigger:hover .breakdown-expand-hint,
+	.breakdown-expand-trigger:focus-visible .breakdown-expand-hint,
+	.breakdown-expand-trigger[aria-expanded='true'] .breakdown-expand-hint {
+		opacity: 1;
+	}
+
+	.breakdown-expanded-list {
+		margin-top: 0.45rem;
+		padding-top: 0.5rem;
+		border-top: 1px dashed #d9e3ef;
+	}
+
+	.breakdown-sub-item {
+		padding-bottom: 0.5rem;
 	}
 
 	/* Activity list */

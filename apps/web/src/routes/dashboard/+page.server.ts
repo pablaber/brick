@@ -219,13 +219,16 @@ export const load: PageServerLoad = async (event) => {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([year, miles]) => ({ year, miles }));
 
-  // Sport breakdown aggregate across recent 16 weeks
+  // Sport breakdown aggregate across recent 1 year
   const sportTotals = new Map<string, number>();
+  const oneYearAgo = new Date(todayUtc);
+  oneYearAgo.setUTCFullYear(oneYearAgo.getUTCFullYear() - 1);
+  const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
   for (const row of weeklyActivityBreakdown) {
     if (
       row.sport_type &&
       row.total_moving_minutes &&
-      (row.period_start ?? '') >= sixteenWeeksAgoStr
+      (row.period_start ?? '') >= oneYearAgoStr
     ) {
       sportTotals.set(
         row.sport_type,

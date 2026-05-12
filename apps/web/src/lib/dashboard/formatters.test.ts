@@ -149,6 +149,11 @@ describe('formatSportType', () => {
     expect(formatSportType('Kayaking')).toBe('Kayaking');
   });
 
+  it('humanizes camel-cased types', () => {
+    expect(formatSportType('AlpineSki')).toBe('Alpine Ski');
+    expect(formatSportType('NordicSki')).toBe('Nordic Ski');
+  });
+
   it('returns Unknown for null', () => {
     expect(formatSportType(null)).toBe('Unknown');
   });
