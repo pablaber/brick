@@ -1,3 +1,7 @@
+<script lang="ts">
+	// Keeps Svelte language tooling from treating this component import as implicit-any.
+</script>
+
 <a
 	href="https://www.strava.com"
 	target="_blank"

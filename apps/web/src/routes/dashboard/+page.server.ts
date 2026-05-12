@@ -63,7 +63,13 @@ export const load: PageServerLoad = async (event) => {
   const currentYearRunningMiles = currentYearRow?.total_distance_miles ?? null;
 
   const runningSports = new Set(['Run', 'TrailRun', 'VirtualRun']);
-  const cyclingSports = new Set(['Ride', 'VirtualRide', 'GravelRide', 'EBikeRide', 'MountainBikeRide']);
+  const cyclingSports = new Set([
+    'Ride',
+    'VirtualRide',
+    'GravelRide',
+    'EBikeRide',
+    'MountainBikeRide'
+  ]);
   const swimmingSports = new Set(['Swim', 'OpenWaterSwimming']);
 
   // Cumulative weekly miles for current year (running + cycling)
@@ -75,9 +81,15 @@ export const load: PageServerLoad = async (event) => {
     const sport = row.sport_type ?? '';
     const miles = metersToMiles(row.total_distance_meters);
     if (runningSports.has(sport)) {
-      weeklyRunningMilesMap.set(row.week_start, (weeklyRunningMilesMap.get(row.week_start) ?? 0) + miles);
+      weeklyRunningMilesMap.set(
+        row.week_start,
+        (weeklyRunningMilesMap.get(row.week_start) ?? 0) + miles
+      );
     } else if (cyclingSports.has(sport)) {
-      weeklyCyclingMilesMap.set(row.week_start, (weeklyCyclingMilesMap.get(row.week_start) ?? 0) + miles);
+      weeklyCyclingMilesMap.set(
+        row.week_start,
+        (weeklyCyclingMilesMap.get(row.week_start) ?? 0) + miles
+      );
     }
   }
 
@@ -104,14 +116,20 @@ export const load: PageServerLoad = async (event) => {
 
   const runningProgress = buildFullYearProgress(weeklyRunningMilesMap);
   const cyclingProgress = buildFullYearProgress(weeklyCyclingMilesMap);
-  const currentYearCyclingMiles = cyclingProgress.length > 0 ? cyclingProgress[cyclingProgress.length - 1].miles : 0;
+  const currentYearCyclingMiles =
+    cyclingProgress.length > 0 ? cyclingProgress[cyclingProgress.length - 1].miles : 0;
 
   // Weekly minutes: aggregate by week and sport category
   type WeekEntry = { running: number; cycling: number; swimming: number; other: number };
   const weekBreakdown = new Map<string, WeekEntry>();
   for (const row of weeklyActivityMinutes) {
     if (row.week_start && row.total_moving_minutes) {
-      const entry = weekBreakdown.get(row.week_start) ?? { running: 0, cycling: 0, swimming: 0, other: 0 };
+      const entry = weekBreakdown.get(row.week_start) ?? {
+        running: 0,
+        cycling: 0,
+        swimming: 0,
+        other: 0
+      };
       const sport = row.sport_type ?? '';
       if (runningSports.has(sport)) {
         entry.running += row.total_moving_minutes;
@@ -165,7 +183,11 @@ export const load: PageServerLoad = async (event) => {
   const sixteenWeeksAgoStr = sixteenWeeksAgo.toISOString().split('T')[0];
   const sportTotals = new Map<string, number>();
   for (const row of weeklySportBreakdown) {
-    if (row.sport_type && row.total_moving_minutes && (row.week_start ?? '') >= sixteenWeeksAgoStr) {
+    if (
+      row.sport_type &&
+      row.total_moving_minutes &&
+      (row.week_start ?? '') >= sixteenWeeksAgoStr
+    ) {
       sportTotals.set(
         row.sport_type,
         (sportTotals.get(row.sport_type) ?? 0) + row.total_moving_minutes

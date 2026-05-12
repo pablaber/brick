@@ -1,3 +1,5 @@
+/// <reference path="../worker-configuration.d.ts" />
+
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import type { Database } from '@workout/shared';
 

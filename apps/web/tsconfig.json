@@ -8,7 +8,6 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler",
-    "types": ["node", "./worker-configuration.d.ts"]
+    "moduleResolution": "bundler"
   }
 }
