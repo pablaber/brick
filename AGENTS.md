@@ -78,6 +78,13 @@ From repo root:
 - No Strava OAuth or sync logic yet.
 - No service role key in the SvelteKit app (only the public anon key).
 
+## Animations
+
+- Use Svelte's built-in transitions from `svelte/transition` (e.g. `slide`, `fade`, `fly`) rather than CSS `@keyframes` or JS animation libraries for enter/exit animations.
+- For collapsible/accordion sections, use `transition:slide={{ duration: 200 }}` on a wrapper `div` with `overflow: hidden`.
+- The `slide` transition does not work with `display: inline`, `display: table`, or `display: contents` — use `block`, `flex`, or `grid`.
+- Keep transition durations short (150–250ms) for UI toggles.
+
 ## Agent Collaboration Notes
 
 - Keep changes scoped; avoid unrelated refactors.

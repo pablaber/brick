@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { slide } from 'svelte/transition';
 
 	let { data, form } = $props();
 	type SettingsFormFeedback = {
@@ -17,6 +18,10 @@
 	let syncProgressPercent = $state(0);
 
 	let syncDetailsOpen = $state(false);
+
+	let colorsOpen = $state(false);
+	let goalsOpen = $state(false);
+	let stravaOpen = $state(!data.strava.connected);
 
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastDismissing = $state(false);
@@ -226,10 +231,14 @@
 		</ul>
 	</div>
 
+	{#if data.strava.connected}
 	<div class="card card-sectioned">
-		<div class="card-heading">
+		<button class="card-heading card-heading-toggle" onclick={() => colorsOpen = !colorsOpen}>
 			<h2>Sport Colors</h2>
-		</div>
+			<span class="chevron" class:chevron-open={colorsOpen}>&#9656;</span>
+		</button>
+		{#if colorsOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
 		<div class="settings-block">
 			<p class="metric-caption">Customize dashboard category colors.</p>
 			{#if settingsForm?.scope === 'colors' && settingsForm.error}
@@ -254,12 +263,19 @@
 				<button type="submit" class="primary-button">Save Colors</button>
 			</form>
 		</div>
-	</div>
-
-	<div class="card card-sectioned">
-		<div class="card-heading">
-			<h2>Goals</h2>
 		</div>
+		{/if}
+	</div>
+	{/if}
+
+	{#if data.strava.connected}
+	<div class="card card-sectioned">
+		<button class="card-heading card-heading-toggle" onclick={() => goalsOpen = !goalsOpen}>
+			<h2>Goals</h2>
+			<span class="chevron" class:chevron-open={goalsOpen}>&#9656;</span>
+		</button>
+		{#if goalsOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
 		<div class="settings-block goals-stack">
 			<p class="metric-caption">Set optional goals that appear on the dashboard.</p>
 			{#if settingsForm?.scope === 'goals' && settingsForm.error}
@@ -306,15 +322,23 @@
 				</div>
 			{/each}
 		</div>
+		</div>
+		{/if}
 	</div>
+	{/if}
 
 	<div class="card card-sectioned">
-		<div class="card-heading">
+		<button class="card-heading card-heading-toggle" onclick={() => stravaOpen = !stravaOpen}>
 			<h2>Strava</h2>
-			{#if data.strava.connected}
-				<span class="status-bubble status-success heading-status">Connected</span>
-			{/if}
-		</div>
+			<span class="card-heading-right">
+				{#if data.strava.connected}
+					<span class="status-bubble status-success heading-status">Connected</span>
+				{/if}
+				<span class="chevron" class:chevron-open={stravaOpen}>&#9656;</span>
+			</span>
+		</button>
+		{#if stravaOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
 		{#if data.strava.connected}
 			<ul class="list">
 				<li class="list-item">
@@ -480,6 +504,8 @@
 				</form>
 			</div>
 		{/if}
+		</div>
+		{/if}
 	</div>
 </section>
 
@@ -524,7 +550,7 @@
 		color: var(--text-muted);
 	}
 
-	.card-sectioned > :last-child {
+	.card-sectioned > :last-child:not(.card-heading) {
 		padding-bottom: 1rem;
 	}
 
@@ -614,6 +640,44 @@
 		gap: 0.5rem;
 	}
 
+	.card-heading-toggle {
+		width: 100%;
+		border: none;
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		transition: background 120ms ease-in-out;
+	}
+
+	.card-heading-toggle:hover {
+		background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+	}
+
+	.card-heading-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.chevron {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.75rem;
+		line-height: 1;
+		color: var(--text-muted);
+		transition: transform 200ms ease;
+	}
+
+	.chevron-open {
+		transform: rotate(90deg);
+	}
+
+	.collapsible-body {
+		overflow: hidden;
+	}
+
 	.card-heading h2 {
 		margin: 0;
 		font-size: 0.85rem;
@@ -660,7 +724,7 @@
 		padding: 0.15rem 0.45rem;
 	}
 
-	.card-sectioned > .sync-details {
+	.card-sectioned .sync-details {
 		margin-top: 0.25rem;
 		border-top: 1px solid var(--line);
 		background: var(--surface-subtle);
@@ -692,7 +756,7 @@
 		margin: 0;
 	}
 
-	.card-sectioned > .list + .list {
+	.card-sectioned .list + .list {
 		margin-top: 0.4rem;
 		padding-top: 0.6rem;
 		border-top: 1px solid var(--line);
