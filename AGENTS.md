@@ -70,6 +70,12 @@ From repo root:
 - Start local Supabase: `npx supabase start`
 - Reset local DB: `npx supabase db reset`
 
+## Formatting
+
+- Always run `pnpm prettier --write <file>` on every file you create or edit before committing.
+- Alternatively, run `pnpm format:write` to fix the entire repo at once.
+- CI runs `pnpm format` (a Prettier check) and will fail if any file is not formatted correctly.
+
 ## Implementation Constraints
 
 - Keep `/dashboard` renderable with mock data until real Strava data is available.
