@@ -52,6 +52,8 @@ describe('user settings helpers', () => {
 
   it('validates goal targets', () => {
     expect(validateGoalTarget('yearly_running_distance', '250').value).toBe(250);
+    expect(validateGoalTarget('yearly_cycling_distance', '350').value).toBe(350);
+    expect(validateGoalTarget('yearly_swimming_distance', '90').value).toBe(90);
     expect(validateGoalTarget('weekly_workout_minutes', '0').error).toContain('between');
     expect(validateGoalTarget('weekly_workout_minutes', 'abc').error).toContain('number');
   });

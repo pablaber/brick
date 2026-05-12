@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import PoweredByStrava from '$lib/components/PoweredByStrava.svelte';
+	import YearlyDistanceGoalCard from '$lib/components/dashboard/YearlyDistanceGoalCard.svelte';
 	import {
 		formatDate,
 		formatMetersAsMiles,
@@ -21,132 +22,28 @@
 		return Math.max(2, Math.round((value / max) * totalHeight));
 	}
 
+	const RUNNING_SPORT_TYPES = new Set(['Run', 'TrailRun', 'VirtualRun']);
+	const CYCLING_SPORT_TYPES = new Set([
+		'Ride',
+		'VirtualRide',
+		'GravelRide',
+		'EBikeRide',
+		'MountainBikeRide'
+	]);
+	const SWIMMING_SPORT_TYPES = new Set(['Swim', 'OpenWaterSwimming']);
+
+	function activityCategory(
+		sportType: string | null | undefined
+	): 'running' | 'cycling' | 'swimming' | 'other' {
+		if (RUNNING_SPORT_TYPES.has(sportType ?? '')) return 'running';
+		if (CYCLING_SPORT_TYPES.has(sportType ?? '')) return 'cycling';
+		if (SWIMMING_SPORT_TYPES.has(sportType ?? '')) return 'swimming';
+		return 'other';
+	}
+
 	const weeklyMax = $derived(Math.max(...data.charts.weeklyMinutes.map((d) => d.minutes), 1));
 	const monthlyMax = $derived(Math.max(...data.charts.monthlyDistance.map((d) => d.miles), 1));
 	const yearlyMax = $derived(Math.max(...data.charts.yearlyDistance.map((d) => d.miles), 1));
-
-	const SVG_H = 64;
-	const SVG_PAD = 2;
-
-	let runningSparkWidth = $state(0);
-	let cyclingSparkWidth = $state(0);
-
-	function yearBounds() {
-		const year = new Date().getUTCFullYear();
-		return {
-			start: Date.UTC(year, 0, 1),
-			end: Date.UTC(year + 1, 0, 1)
-		};
-	}
-
-	function yearProgressForDate(dateStr: string): number {
-		const { start, end } = yearBounds();
-		const timestamp = new Date(`${dateStr}T00:00:00Z`).getTime();
-		if (Number.isNaN(timestamp)) return 0;
-		return Math.max(0, Math.min(1, (timestamp - start) / (end - start)));
-	}
-
-	function dateToX(dateStr: string, w: number): number {
-		return SVG_PAD + yearProgressForDate(dateStr) * (w - SVG_PAD * 2);
-	}
-
-	function milesToY(miles: number, maxMiles: number): number {
-		const h = SVG_H - SVG_PAD * 2;
-		return SVG_PAD + h - (miles / maxMiles) * h;
-	}
-
-	function resolveSparkMax(points: { miles: number }[], goalTarget: number | null): number {
-		const pointMax = Math.max(...points.map((p) => p.miles), 1);
-		if (goalTarget == null || goalTarget <= 0) return pointMax;
-		return Math.max(pointMax, goalTarget);
-	}
-
-	function sparkCoords(points: { date: string; miles: number }[], w: number, maxMiles: number) {
-		if (points.length === 0 || w <= 0) return [];
-		return points.map((p) => ({
-			x: dateToX(p.date, w),
-			y: milesToY(p.miles, maxMiles)
-		}));
-	}
-
-	function sparkGoalPath(goalTarget: number | null, w: number, maxMiles: number): string {
-		if (goalTarget == null || goalTarget <= 0 || w <= 0) return '';
-		const year = new Date().getUTCFullYear();
-		const x1 = dateToX(`${year}-01-01`, w);
-		const y1 = milesToY(0, maxMiles);
-		const x2 = dateToX(`${year + 1}-01-01`, w);
-		const y2 = milesToY(goalTarget, maxMiles);
-		return `M${x1},${y1} L${x2},${y2}`;
-	}
-
-	function sparkPaths(coords: { x: number; y: number }[]): { line: string; area: string } {
-		if (coords.length === 0) return { line: '', area: '' };
-		const line = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
-		const last = coords[coords.length - 1];
-		const first = coords[0];
-		const area = `${line} L${last.x},${SVG_H} L${first.x},${SVG_H} Z`;
-		return { line, area };
-	}
-
-	const runningGoalTarget = $derived(data.stats.goals.yearlyRunningDistance?.target ?? null);
-	const runningSparkMax = $derived(resolveSparkMax(data.charts.runningProgress, runningGoalTarget));
-	const cyclingSparkMax = $derived(resolveSparkMax(data.charts.cyclingProgress, null));
-
-	const runningCoords = $derived(
-		sparkCoords(data.charts.runningProgress, runningSparkWidth, runningSparkMax)
-	);
-	const cyclingCoords = $derived(
-		sparkCoords(data.charts.cyclingProgress, cyclingSparkWidth, cyclingSparkMax)
-	);
-	const runningSpark = $derived(sparkPaths(runningCoords));
-	const cyclingSpark = $derived(sparkPaths(cyclingCoords));
-	const runningGoalSpark = $derived(
-		sparkGoalPath(runningGoalTarget, runningSparkWidth, runningSparkMax)
-	);
-
-	function goalMilesAtDate(goalTarget: number | null, dateStr: string | null): number | null {
-		if (goalTarget == null || goalTarget <= 0 || !dateStr) return null;
-		return goalTarget * yearProgressForDate(dateStr);
-	}
-
-	function monthTicksForWidth(width: number) {
-		if (width <= 0) return [];
-		const year = new Date().getFullYear();
-		const months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-		return months.map((label, i) => {
-			const x = dateToX(`${year}-${String(i + 2).padStart(2, '0')}-01`, width);
-			return { label, x, pct: (x / width) * 100 };
-		});
-	}
-	const runningMonthTicks = $derived(monthTicksForWidth(runningSparkWidth));
-	const cyclingMonthTicks = $derived(monthTicksForWidth(cyclingSparkWidth));
-
-	let runningHover = $state<number | null>(null);
-	let cyclingHover = $state<number | null>(null);
-
-	function handleSparkMove(
-		e: MouseEvent,
-		coords: { x: number; y: number }[],
-		setIndex: (i: number | null) => void
-	) {
-		const el = e.currentTarget as HTMLElement;
-		const rect = el.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		if (coords.length === 0) {
-			setIndex(null);
-			return;
-		}
-		let nearestIdx = 0;
-		let nearestDistance = Math.abs(coords[0].x - x);
-		for (let i = 1; i < coords.length; i += 1) {
-			const distance = Math.abs(coords[i].x - x);
-			if (distance < nearestDistance) {
-				nearestIdx = i;
-				nearestDistance = distance;
-			}
-		}
-		setIndex(nearestIdx);
-	}
 </script>
 
 <section
@@ -187,140 +84,27 @@
 	{:else}
 		<!-- Stat cards -->
 		<div class="card-grid">
-			<article class="card">
-				<h2>Running Miles This Year</h2>
-				<div class="metric-goal-row">
-					<p class="metric">{formatMiles(data.stats.currentYearRunningMiles)}</p>
-					{#if data.stats.goals.yearlyRunningDistance}
-						<p class="metric-caption metric-caption-inline">
-							Goal: {formatMiles(data.stats.goals.yearlyRunningDistance.target)} ({data.stats.goals.yearlyRunningDistance.pct}%)
-						</p>
-					{/if}
-				</div>
-				{#if data.charts.runningProgress.length > 1}
-					<div
-						class="sparkline-wrapper"
-						role="img"
-					>
-						<div
-								class="sparkline-graph"
-								role="img"
-								bind:clientWidth={runningSparkWidth}
-								onmousemove={(e) => handleSparkMove(e, runningCoords, (i) => runningHover = i)}
-								onmouseleave={() => runningHover = null}
-							>
-								{#if runningSparkWidth > 0}
-									<svg class="sparkline" viewBox="0 0 {runningSparkWidth} {SVG_H}">
-										{#each runningMonthTicks as tick (tick.label)}
-											<line x1={tick.x} y1="0" x2={tick.x} y2={SVG_H} class="sparkline-month-tick" />
-										{/each}
-									{#if runningGoalSpark}
-										<path d={runningGoalSpark} class="sparkline-goal-line" />
-									{/if}
-										<path d={runningSpark.area} class="sparkline-area sparkline-running" />
-										<path d={runningSpark.line} class="sparkline-line sparkline-running-line" />
-										{#if runningHover !== null}
-											{@const currentPoint = runningHover < runningCoords.length ? runningCoords[runningHover] : null}
-											{@const currentProgress = runningHover < data.charts.runningProgress.length ? data.charts.runningProgress[runningHover] : null}
-											{@const goalMiles = goalMilesAtDate(runningGoalTarget, currentProgress?.date ?? null)}
-											{#if currentPoint}
-												<line x1={currentPoint.x} y1="0" x2={currentPoint.x} y2={SVG_H} class="sparkline-cursor" />
-												{#if goalMiles !== null}
-													<circle cx={currentPoint.x} cy={milesToY(goalMiles, runningSparkMax)} r="4" class="sparkline-dot dot-goal-stroke" />
-												{/if}
-												<circle cx={currentPoint.x} cy={currentPoint.y} r="4" class="sparkline-dot dot-running-stroke" />
-											{/if}
-										{/if}
-									</svg>
-								{/if}
-								{#if runningHover !== null && runningSparkWidth > 0}
-									{@const currentPoint = runningHover < runningCoords.length ? runningCoords[runningHover] : null}
-									{@const currentProgress = runningHover < data.charts.runningProgress.length ? data.charts.runningProgress[runningHover] : null}
-									{@const goalMiles = goalMilesAtDate(runningGoalTarget, currentProgress?.date ?? null)}
-									{#if currentPoint && currentProgress}
-									<div class="sparkline-tip" style="left: {(currentPoint.x / runningSparkWidth) * 100}%">
-										<div class="sparkline-tip-header">{formatWeek(currentProgress.date)}</div>
-										<div class="sparkline-tip-row">
-												<span class="sparkline-tip-label"><span class="tooltip-dot dot-running"></span>Current</span>
-											<strong>{formatMiles(currentProgress.miles)}</strong>
-										</div>
-										{#if goalMiles !== null}
-											{@const goalDelta = currentProgress.miles - goalMiles}
-											<div class="sparkline-tip-row">
-												<span class="sparkline-tip-label"><span class="tooltip-dot dot-goal"></span>Goal</span>
-												<span>{formatMiles(goalMiles)}</span>
-											</div>
-											<div class="sparkline-tip-row">
-													<span class="sparkline-tip-label">{goalDelta >= 0 ? 'Ahead of Goal -' : 'Behind Goal'}</span>
-												<span>{formatMiles(Math.abs(goalDelta))}</span>
-											</div>
-										{/if}
-									</div>
-									{/if}
-								{/if}
-							</div>
-							<div class="sparkline-month-labels">
-								{#each runningMonthTicks as tick (tick.label)}
-									<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
-								{/each}
-							</div>
-					</div>
-				{/if}
-			</article>
-
-			<article class="card">
-				<h2>Cycling Miles This Year</h2>
-				<p class="metric">{formatMiles(data.stats.currentYearCyclingMiles)}</p>
-				{#if data.charts.cyclingProgress.length > 1}
-					<div
-						class="sparkline-wrapper"
-						role="img"
-					>
-						<div
-								class="sparkline-graph"
-								role="img"
-								bind:clientWidth={cyclingSparkWidth}
-								onmousemove={(e) => handleSparkMove(e, cyclingCoords, (i) => cyclingHover = i)}
-								onmouseleave={() => cyclingHover = null}
-							>
-								{#if cyclingSparkWidth > 0}
-									<svg class="sparkline" viewBox="0 0 {cyclingSparkWidth} {SVG_H}">
-										{#each cyclingMonthTicks as tick (tick.label)}
-											<line x1={tick.x} y1="0" x2={tick.x} y2={SVG_H} class="sparkline-month-tick" />
-										{/each}
-										<path d={cyclingSpark.area} class="sparkline-area sparkline-cycling" />
-										<path d={cyclingSpark.line} class="sparkline-line sparkline-cycling-line" />
-										{#if cyclingHover !== null}
-											{@const currentPoint = cyclingHover < cyclingCoords.length ? cyclingCoords[cyclingHover] : null}
-											{#if currentPoint}
-												<line x1={currentPoint.x} y1="0" x2={currentPoint.x} y2={SVG_H} class="sparkline-cursor" />
-												<circle cx={currentPoint.x} cy={currentPoint.y} r="4" class="sparkline-dot dot-cycling-stroke" />
-											{/if}
-										{/if}
-									</svg>
-								{/if}
-								{#if cyclingHover !== null && cyclingSparkWidth > 0}
-									{@const currentPoint = cyclingHover < cyclingCoords.length ? cyclingCoords[cyclingHover] : null}
-									{@const currentProgress = cyclingHover < data.charts.cyclingProgress.length ? data.charts.cyclingProgress[cyclingHover] : null}
-									{#if currentPoint && currentProgress}
-									<div class="sparkline-tip" style="left: {(currentPoint.x / cyclingSparkWidth) * 100}%">
-										<div class="sparkline-tip-row">
-											<strong>Current {formatMiles(currentProgress.miles)}</strong>
-										</div>
-										<span>{formatWeek(currentProgress.date)}</span>
-									</div>
-									{/if}
-								{/if}
-							</div>
-							<div class="sparkline-month-labels">
-								{#each cyclingMonthTicks as tick (tick.label)}
-									<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
-								{/each}
-							</div>
-					</div>
-				{/if}
-			</article>
-
+			<YearlyDistanceGoalCard
+				title="Running Miles This Year"
+				currentMiles={data.stats.currentYearRunningMiles}
+				progress={data.charts.runningProgress}
+				goal={data.stats.goals.yearlyRunningDistance}
+				color={data.categoryColors.running}
+			/>
+			<YearlyDistanceGoalCard
+				title="Cycling Miles This Year"
+				currentMiles={data.stats.currentYearCyclingMiles}
+				progress={data.charts.cyclingProgress}
+				goal={data.stats.goals.yearlyCyclingDistance}
+				color={data.categoryColors.cycling}
+			/>
+			<YearlyDistanceGoalCard
+				title="Swimming Miles This Year"
+				currentMiles={data.stats.currentYearSwimmingMiles}
+				progress={data.charts.swimmingProgress}
+				goal={data.stats.goals.yearlySwimmingDistance}
+				color={data.categoryColors.swimming}
+			/>
 			<article class="card">
 				<h2>Workout Minutes This Week</h2>
 				<p class="metric">{formatMinutes(data.stats.thisWeekWorkoutMinutes)}</p>
@@ -333,11 +117,6 @@
 				{/if}
 			</article>
 
-			<article class="card">
-				<h2>Synced Activities</h2>
-				<p class="metric">{data.stats.syncedActivityCount ?? '—'}</p>
-				<p class="metric-caption">Total activities imported from Strava</p>
-			</article>
 		</div>
 
 		<!-- Weekly minutes chart -->
@@ -498,7 +277,9 @@
 									{/if}
 								</div>
 							</div>
-							<span class="pill">{formatSportType(activity.sportType)}</span>
+							<span class={`pill activity-pill pill-${activityCategory(activity.sportType)}`}>
+								{formatSportType(activity.sportType)}
+							</span>
 						</li>
 					{/each}
 				</ul>
@@ -521,155 +302,6 @@
 		margin: 0;
 		font-size: 1rem;
 		font-weight: 500;
-	}
-
-	/* Sparkline */
-	.metric-goal-row {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.metric-caption-inline {
-		margin: 0;
-	}
-
-	.sparkline-wrapper {
-		margin-top: 0.5rem;
-	}
-
-	.sparkline-graph {
-		position: relative;
-		height: 64px;
-		cursor: crosshair;
-	}
-
-	.sparkline {
-		display: block;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-	}
-
-	.sparkline-area {
-		opacity: 0.15;
-	}
-
-	.sparkline-line {
-		fill: none;
-		stroke-width: 2;
-	}
-
-	.sparkline-goal-line {
-		fill: none;
-		stroke: var(--text-muted);
-		stroke-width: 1.5;
-		stroke-linecap: round;
-		opacity: 0.9;
-	}
-
-	.sparkline-month-tick {
-		stroke: var(--text-muted);
-		stroke-width: 1;
-		opacity: 0.15;
-	}
-
-	.sparkline-month-labels {
-		position: relative;
-		height: 14px;
-	}
-
-	.sparkline-month-label {
-		position: absolute;
-		transform: translateX(-50%);
-		font-size: 0.55rem;
-		color: var(--text-muted);
-		pointer-events: none;
-	}
-
-	.sparkline-cursor {
-		stroke: var(--text-muted);
-		stroke-width: 1;
-		stroke-dasharray: 3 3;
-		opacity: 0.5;
-	}
-
-	.sparkline-dot {
-		fill: var(--surface);
-		stroke-width: 2;
-	}
-
-	.dot-running-stroke {
-		stroke: var(--color-running);
-	}
-
-	.dot-goal-stroke {
-		stroke: var(--text-muted);
-	}
-
-	.dot-cycling-stroke {
-		stroke: var(--color-cycling);
-	}
-
-	.sparkline-tip {
-		position: absolute;
-		bottom: 100%;
-		transform: translateX(-50%);
-		background: #1a2740;
-		color: #fff;
-		font-size: 0.7rem;
-		padding: 3px 7px;
-		border-radius: 5px;
-		white-space: nowrap;
-		pointer-events: none;
-		z-index: 20;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		align-items: stretch;
-	}
-
-	.sparkline-tip-header {
-		color: #94a3b8;
-		font-size: 0.62rem;
-		font-weight: 400;
-	}
-
-	.sparkline-tip-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-		font-size: 0.68rem;
-	}
-
-	.sparkline-tip-row > :last-child {
-		padding-left: 4px;
-	}
-
-	.sparkline-tip-label {
-		color: #94a3b8;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-
-	.sparkline-running {
-		fill: var(--color-running);
-	}
-
-	.sparkline-running-line {
-		stroke: var(--color-running);
-	}
-
-	.sparkline-cycling {
-		fill: var(--color-cycling);
-	}
-
-	.sparkline-cycling-line {
-		stroke: var(--color-cycling);
 	}
 
 	/* Bar chart */
@@ -767,10 +399,6 @@
 
 	.dot-other {
 		background: var(--color-other);
-	}
-
-	.dot-goal {
-		background: var(--text-muted);
 	}
 
 	/* Simple text tooltip (monthly/yearly charts) */
@@ -956,6 +584,26 @@
 	.activity-meta {
 		font-size: 0.82rem;
 		color: var(--text-muted);
+	}
+
+	.activity-pill {
+		color: #fff;
+	}
+
+	.pill-running {
+		background: var(--color-running);
+	}
+
+	.pill-cycling {
+		background: var(--color-cycling);
+	}
+
+	.pill-swimming {
+		background: var(--color-swimming);
+	}
+
+	.pill-other {
+		background: var(--color-other);
 	}
 
 	.powered-by-footer {

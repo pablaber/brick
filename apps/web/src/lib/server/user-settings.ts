@@ -8,13 +8,18 @@ type GoalRow = Database['public']['Tables']['user_goals']['Row'];
 export const SPORT_CATEGORIES = ['running', 'cycling', 'swimming', 'other'] as const;
 export type SportCategory = (typeof SPORT_CATEGORIES)[number];
 
-export const GOAL_TYPES = ['yearly_running_distance', 'weekly_workout_minutes'] as const;
+export const GOAL_TYPES = [
+  'yearly_running_distance',
+  'yearly_cycling_distance',
+  'yearly_swimming_distance',
+  'weekly_workout_minutes'
+] as const;
 export type GoalType = (typeof GOAL_TYPES)[number];
 
 export const DEFAULT_CATEGORY_COLORS: Record<SportCategory, string> = {
-  running: '#0D6EFD',
-  cycling: '#E8A838',
-  swimming: '#38BDF8',
+  running: '#F97316',
+  cycling: '#22C55E',
+  swimming: '#0EA5E9',
   other: '#8B5CF6'
 };
 
@@ -38,6 +43,26 @@ export const GOAL_DEFINITIONS: Record<GoalType, GoalDefinition> = {
     unit: 'miles',
     period: 'yearly',
     sportCategory: 'running',
+    min: 1,
+    max: 10000,
+    step: 1
+  },
+  yearly_cycling_distance: {
+    goalType: 'yearly_cycling_distance',
+    label: 'Yearly cycling distance',
+    unit: 'miles',
+    period: 'yearly',
+    sportCategory: 'cycling',
+    min: 1,
+    max: 10000,
+    step: 1
+  },
+  yearly_swimming_distance: {
+    goalType: 'yearly_swimming_distance',
+    label: 'Yearly swimming distance',
+    unit: 'miles',
+    period: 'yearly',
+    sportCategory: 'swimming',
     min: 1,
     max: 10000,
     step: 1

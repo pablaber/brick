@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
-	import { onMount, untrack } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { slide } from 'svelte/transition';
 
 	let { data, form } = $props();
@@ -26,6 +26,7 @@
 	let displayNameEditing = $state(false);
 	let displayNameValue = $state(untrack(() => data.displayName ?? ''));
 	let displayNameSaving = $state(false);
+	let displayNameInput = $state<HTMLInputElement | null>(null);
 
 	let colorValues = $state(untrack(() => ({ ...data.settings.colors })));
 	let colorSaving = $state(false);
@@ -140,6 +141,14 @@
 
 	function formatCategoryName(category: string): string {
 		return category.charAt(0).toUpperCase() + category.slice(1);
+	}
+
+	async function beginDisplayNameEditing() {
+		displayNameEditing = true;
+		displayNameValue = data.displayName ?? '';
+		await tick();
+		displayNameInput?.focus();
+		displayNameInput?.select();
 	}
 
 	async function onSyncSubmit(event: SubmitEvent) {
@@ -274,6 +283,7 @@
 								maxlength={80}
 								placeholder="Enter display name"
 								bind:value={displayNameValue}
+								bind:this={displayNameInput}
 							/>
 							<button type="submit" class="primary-button" disabled={displayNameSaving}>
 								{displayNameSaving ? 'Saving…' : 'Save'}
@@ -297,10 +307,7 @@
 								type="button"
 								class="icon-button"
 								aria-label="Edit display name"
-								onclick={() => {
-									displayNameEditing = true;
-									displayNameValue = data.displayName ?? '';
-								}}
+								onclick={beginDisplayNameEditing}
 							>
 								&#9998;
 							</button>

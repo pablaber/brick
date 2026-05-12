@@ -60,9 +60,9 @@ export const load: PageServerLoad = async (event) => {
       ? settingsResult.value
       : {
           colors: {
-            running: '#0D6EFD',
-            cycling: '#E8A838',
-            swimming: '#38BDF8',
+            running: '#F97316',
+            cycling: '#22C55E',
+            swimming: '#0EA5E9',
             other: '#8B5CF6'
           },
           activeGoals: {}
@@ -114,11 +114,17 @@ export const load: PageServerLoad = async (event) => {
     for (const [periodStart, miles] of [...monthlyMiles.entries()].sort(([a], [b]) =>
       a.localeCompare(b)
     )) {
-      cumulative += miles;
       const monthDate = new Date(`${periodStart}T00:00:00Z`);
       const isCurrentMonth =
         monthDate.getUTCFullYear() === todayUtc.getUTCFullYear() &&
         monthDate.getUTCMonth() === todayUtc.getUTCMonth();
+
+      // Hold the line flat until the month starts, then slope across the month.
+      if (points[points.length - 1]?.date !== periodStart) {
+        points.push({ date: periodStart, miles: cumulative });
+      }
+
+      cumulative += miles;
       const pointDate = new Date(monthDate);
       if (!isCurrentMonth) {
         pointDate.setUTCMonth(pointDate.getUTCMonth() + 1);
@@ -136,11 +142,13 @@ export const load: PageServerLoad = async (event) => {
 
   const runningProgress = buildYearProgress(runningSports);
   const cyclingProgress = buildYearProgress(cyclingSports);
+  const swimmingProgress = buildYearProgress(swimmingSports);
   const currentYearRows = yearlyActivityBreakdown.filter((row) =>
     row.period_start?.startsWith(currentYear)
   );
   const currentYearRunningMiles = sumDistanceMiles(currentYearRows, runningSports);
   const currentYearCyclingMiles = sumDistanceMiles(currentYearRows, cyclingSports);
+  const currentYearSwimmingMiles = sumDistanceMiles(currentYearRows, swimmingSports);
 
   // Weekly minutes: aggregate by week and sport category
   type WeekEntry = { running: number; cycling: number; swimming: number; other: number };
@@ -235,10 +243,27 @@ export const load: PageServerLoad = async (event) => {
     .sort((a, b) => b.minutes - a.minutes);
 
   const yearlyRunningGoal = userSettings.activeGoals.yearly_running_distance;
+  const yearlyCyclingGoal = userSettings.activeGoals.yearly_cycling_distance;
+  const yearlySwimmingGoal = userSettings.activeGoals.yearly_swimming_distance;
   const weeklyWorkoutGoal = userSettings.activeGoals.weekly_workout_minutes;
 
   const runningCurrent = currentYearRunningMiles ?? 0;
+  const cyclingCurrent = currentYearCyclingMiles ?? 0;
+  const swimmingCurrent = currentYearSwimmingMiles ?? 0;
   const weeklyCurrent = thisWeekWorkoutMinutes ?? 0;
+
+  function buildGoalSummary(
+    goal: typeof yearlyRunningGoal | typeof yearlyCyclingGoal | typeof yearlySwimmingGoal,
+    current: number
+  ) {
+    if (!goal) return null;
+    return {
+      target: goal.targetValue,
+      current,
+      unit: goal.unit,
+      pct: Math.round((current / goal.targetValue) * 100)
+    };
+  }
 
   return {
     connection,
@@ -246,17 +271,13 @@ export const load: PageServerLoad = async (event) => {
     stats: {
       currentYearRunningMiles,
       currentYearCyclingMiles,
+      currentYearSwimmingMiles,
       thisWeekWorkoutMinutes,
       syncedActivityCount: activityCount,
       goals: {
-        yearlyRunningDistance: yearlyRunningGoal
-          ? {
-              target: yearlyRunningGoal.targetValue,
-              current: runningCurrent,
-              unit: yearlyRunningGoal.unit,
-              pct: Math.round((runningCurrent / yearlyRunningGoal.targetValue) * 100)
-            }
-          : null,
+        yearlyRunningDistance: buildGoalSummary(yearlyRunningGoal, runningCurrent),
+        yearlyCyclingDistance: buildGoalSummary(yearlyCyclingGoal, cyclingCurrent),
+        yearlySwimmingDistance: buildGoalSummary(yearlySwimmingGoal, swimmingCurrent),
         weeklyWorkoutMinutes: weeklyWorkoutGoal
           ? {
               target: weeklyWorkoutGoal.targetValue,
@@ -274,7 +295,8 @@ export const load: PageServerLoad = async (event) => {
       yearlyDistance: yearlyDistanceChart,
       sportBreakdown: sportBreakdownChart,
       runningProgress,
-      cyclingProgress
+      cyclingProgress,
+      swimmingProgress
     },
     recentActivities
   };
