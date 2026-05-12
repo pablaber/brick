@@ -136,7 +136,7 @@
 						<div class="sparkline-graph" bind:clientWidth={sparkWidth}>
 							{#if sparkWidth > 0}
 								<svg class="sparkline" viewBox="0 0 {sparkWidth} {SVG_H}">
-									{#each monthTicks as tick}
+									{#each monthTicks as tick (tick.label)}
 										<line x1={tick.x} y1="0" x2={tick.x} y2={SVG_H} class="sparkline-month-tick" />
 									{/each}
 									<path d={runningSpark.area} class="sparkline-area sparkline-running" />
@@ -156,11 +156,11 @@
 								</div>
 							{/if}
 						</div>
-						<div class="sparkline-month-labels">
-							{#each monthTicks as tick}
-								<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
-							{/each}
-						</div>
+							<div class="sparkline-month-labels">
+								{#each monthTicks as tick (tick.label)}
+									<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
+								{/each}
+							</div>
 					</div>
 				{/if}
 			</article>
@@ -178,7 +178,7 @@
 						<div class="sparkline-graph" bind:clientWidth={sparkWidth}>
 							{#if sparkWidth > 0}
 								<svg class="sparkline" viewBox="0 0 {sparkWidth} {SVG_H}">
-									{#each monthTicks as tick}
+									{#each monthTicks as tick (tick.label)}
 										<line x1={tick.x} y1="0" x2={tick.x} y2={SVG_H} class="sparkline-month-tick" />
 									{/each}
 									<path d={cyclingSpark.area} class="sparkline-area sparkline-cycling" />
@@ -198,11 +198,11 @@
 								</div>
 							{/if}
 						</div>
-						<div class="sparkline-month-labels">
-							{#each monthTicks as tick}
-								<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
-							{/each}
-						</div>
+							<div class="sparkline-month-labels">
+								{#each monthTicks as tick (tick.label)}
+									<span class="sparkline-month-label" style="left: {tick.pct}%">{tick.label}</span>
+								{/each}
+							</div>
 					</div>
 				{/if}
 			</article>
