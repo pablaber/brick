@@ -5,6 +5,7 @@ import {
   getMonthlyActivityBreakdown,
   getRecentActivities,
   getStravaConnectionStatus,
+  getTrainingDurationActivities,
   getWeeklyActivityBreakdown,
   getYearlyActivityBreakdown
 } from '$lib/server/dashboard';
@@ -23,6 +24,7 @@ export const load: PageServerLoad = async (event) => {
     connectionResult,
     syncRunResult,
     recentActivitiesResult,
+    trainingDurationActivitiesResult,
     weeklyBreakdownResult,
     monthlyBreakdownResult,
     yearlyBreakdownResult,
@@ -32,6 +34,7 @@ export const load: PageServerLoad = async (event) => {
     getStravaConnectionStatus(supabase, userId),
     getLatestSyncRun(supabase, userId),
     getRecentActivities(supabase, userId),
+    getTrainingDurationActivities(supabase, userId),
     getWeeklyActivityBreakdown(supabase, userId, 53),
     getMonthlyActivityBreakdown(supabase, userId, 12),
     getYearlyActivityBreakdown(supabase, userId),
@@ -47,6 +50,10 @@ export const load: PageServerLoad = async (event) => {
   const latestSyncRun = syncRunResult.status === 'fulfilled' ? syncRunResult.value : null;
   const recentActivities =
     recentActivitiesResult.status === 'fulfilled' ? recentActivitiesResult.value : [];
+  const trainingDurationActivities =
+    trainingDurationActivitiesResult.status === 'fulfilled'
+      ? trainingDurationActivitiesResult.value
+      : [];
   const weeklyActivityBreakdown =
     weeklyBreakdownResult.status === 'fulfilled' ? weeklyBreakdownResult.value : [];
   const monthlyActivityBreakdown =
@@ -297,6 +304,7 @@ export const load: PageServerLoad = async (event) => {
       cyclingProgress,
       swimmingProgress
     },
-    recentActivities
+    recentActivities,
+    trainingDurationActivities
   };
 };

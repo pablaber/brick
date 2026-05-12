@@ -74,6 +74,25 @@ export async function getRecentActivities(supabase: Supabase, userId: string, li
   }));
 }
 
+export async function getTrainingDurationActivities(supabase: Supabase, userId: string) {
+  const since = dateStringWeeksAgo(26);
+  const { data, error } = await supabase
+    .from('activities')
+    .select('id, strava_activity_id, name, sport_type, start_date, moving_time_seconds')
+    .eq('user_id', userId)
+    .gte('start_date', since)
+    .order('start_date', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    stravaActivityId: row.strava_activity_id,
+    name: row.name,
+    sportType: row.sport_type,
+    startDate: row.start_date,
+    movingTimeSeconds: row.moving_time_seconds
+  }));
+}
+
 export async function getWeeklyActivityBreakdown(
   supabase: Supabase,
   userId: string,

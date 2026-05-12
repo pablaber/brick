@@ -143,7 +143,7 @@
 				color={data.categoryColors.swimming}
 			/>
 			<TrainingDurationThisWeekCard
-				recentActivities={data.recentActivities}
+				recentActivities={data.trainingDurationActivities}
 				weeklyWorkoutGoal={data.stats.goals.weeklyWorkoutMinutes}
 			/>
 		</div>
