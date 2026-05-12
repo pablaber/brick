@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { DASHBOARD_COMPACT_CHART_HEIGHT_PX } from '$lib/components/dashboard/constants';
 	import { formatWeek } from '$lib/dashboard/formatters';
 
 	type YearProgressPoint = {
@@ -25,7 +26,7 @@
 		color: string;
 	} = $props();
 
-	const SVG_H = 64;
+	const SVG_H = DASHBOARD_COMPACT_CHART_HEIGHT_PX;
 	const SVG_PAD = 2;
 
 	let sparkWidth = $state(0);
@@ -160,7 +161,10 @@
 	const monthTicks = $derived(monthTicksForWidth(sparkWidth));
 </script>
 
-<article class="card spark-card" style={`--spark-color: ${color};`}>
+<article
+	class="card spark-card"
+	style={`--spark-color: ${color}; --dashboard-compact-chart-height: ${DASHBOARD_COMPACT_CHART_HEIGHT_PX}px;`}
+>
 	<h2>{title}</h2>
 	<div class="metric-goal-row">
 		<p class="metric">{formatCardMiles(currentMiles)}</p>
@@ -261,7 +265,7 @@
 
 	.sparkline-graph {
 		position: relative;
-		height: 64px;
+		height: var(--dashboard-compact-chart-height);
 		cursor: crosshair;
 	}
 

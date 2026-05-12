@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import PoweredByStrava from '$lib/components/PoweredByStrava.svelte';
+	import { DASHBOARD_COMPACT_CHART_HEIGHT_PX } from '$lib/components/dashboard/constants';
 	import YearlyDistanceGoalCard from '$lib/components/dashboard/YearlyDistanceGoalCard.svelte';
 	import {
 		formatDate,
@@ -31,6 +32,7 @@
 		'MountainBikeRide'
 	]);
 	const SWIMMING_SPORT_TYPES = new Set(['Swim', 'OpenWaterSwimming']);
+	const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 	function activityCategory(
 		sportType: string | null | undefined
@@ -41,9 +43,87 @@
 		return 'other';
 	}
 
+	function weekStartKey(dateLike: string): string | null {
+		const parsed = new Date(dateLike);
+		if (Number.isNaN(parsed.getTime())) return null;
+		const weekStart = new Date(parsed);
+		const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
+		weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+		weekStart.setUTCHours(0, 0, 0, 0);
+		return weekStart.toISOString().slice(0, 10);
+	}
+
+	function weekdayIndexMonday(dateLike: string): number | null {
+		const parsed = new Date(dateLike);
+		if (Number.isNaN(parsed.getTime())) return null;
+		return (parsed.getUTCDay() + 6) % 7;
+	}
+
 	const weeklyMax = $derived(Math.max(...data.charts.weeklyMinutes.map((d) => d.minutes), 1));
 	const monthlyMax = $derived(Math.max(...data.charts.monthlyDistance.map((d) => d.miles), 1));
 	const yearlyMax = $derived(Math.max(...data.charts.yearlyDistance.map((d) => d.miles), 1));
+	const weeklyMonthLabelWeeks = $derived(
+		new Set(
+			data.charts.weeklyMinutes
+				.filter((item, i, weeks) => i === 0 || item.week.slice(0, 7) !== weeks[i - 1].week.slice(0, 7))
+				.map((item) => item.week)
+		)
+	);
+
+	const now = new Date();
+	const currentWeekKey = (() => {
+		const weekStart = new Date(now);
+		const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
+		weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+		weekStart.setUTCHours(0, 0, 0, 0);
+		return weekStart.toISOString().slice(0, 10);
+	})();
+	const currentMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+	const currentYearKey = `${now.getUTCFullYear()}-01-01`;
+	const thisWeekActivities = $derived.by(() =>
+		data.recentActivities
+			.flatMap((activity) => {
+				const startDate = activity.startDate;
+				const movingTimeSeconds = activity.movingTimeSeconds ?? 0;
+				const weekdayIndex = startDate ? weekdayIndexMonday(startDate) : null;
+				if (
+					!startDate ||
+					weekdayIndex === null ||
+					movingTimeSeconds <= 0 ||
+					weekStartKey(startDate) !== currentWeekKey
+				) {
+					return [];
+				}
+				return [
+					{
+						id: activity.id,
+						name: activity.name?.trim() || 'Untitled',
+						startDate,
+						weekdayIndex,
+						category: activityCategory(activity.sportType),
+						minutes: movingTimeSeconds / 60
+					}
+				];
+			})
+			.sort(
+				(a, b) =>
+					a.weekdayIndex - b.weekdayIndex ||
+					a.startDate.localeCompare(b.startDate) ||
+					a.id.localeCompare(b.id)
+			)
+	);
+	const thisWeekDayColumns = $derived.by(() => {
+		const groups = WEEKDAY_LABELS.map((weekdayLabel, weekdayIndex) => ({
+			weekdayIndex,
+			weekdayLabel,
+			activities: [] as Array<(typeof thisWeekActivities)[number]>
+		}));
+		for (const activity of thisWeekActivities) {
+			groups[activity.weekdayIndex].activities.push(activity);
+		}
+		return groups;
+	});
+	const thisWeekActivityMax = $derived(Math.max(...thisWeekActivities.map((activity) => activity.minutes), 1));
 </script>
 
 <section
@@ -101,10 +181,39 @@
 					<p class="metric-caption">
 						Goal: {formatMinutes(data.stats.goals.weeklyWorkoutMinutes.target)} ({data.stats.goals.weeklyWorkoutMinutes.pct}%)
 					</p>
-				{:else}
-					<p class="metric-caption">Total training minutes this week</p>
 				{/if}
-			</article>
+					{#if thisWeekActivities.length > 0}
+						<div
+							class="activity-columns-chart"
+							style={`--dashboard-compact-chart-height: ${DASHBOARD_COMPACT_CHART_HEIGHT_PX}px`}
+						>
+							<div class="activity-day-groups">
+								{#each thisWeekDayColumns as day (day.weekdayIndex)}
+									<div class="activity-day-group">
+										<div class="activity-day-columns">
+											{#each day.activities as activity (activity.id)}
+												<div class="activity-col has-tooltip">
+													<div class="chart-tooltip">
+														<div class="tooltip-header tooltip-header-activity">
+															<span class={`tooltip-dot dot-${activity.category}`}></span>
+															<span>{activity.name}</span>
+														</div>
+														<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
+													</div>
+													<div
+														class={`activity-column-bar bar-${activity.category}`}
+														style={`height: ${barHeight(activity.minutes, thisWeekActivityMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
+													></div>
+												</div>
+											{/each}
+										</div>
+										<span class="activity-col-label">{day.weekdayLabel}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</article>
 
 		</div>
 
@@ -120,7 +229,7 @@
 				</div>
 				<div class="chart-wrapper">
 					<div class="chart-bars">
-						{#each data.charts.weeklyMinutes as item, i (item.week)}
+						{#each data.charts.weeklyMinutes as item (item.week)}
 							<div class="chart-col has-tooltip">
 								<div class="chart-tooltip">
 									<div class="tooltip-header">Wk of {formatWeek(item.week)}</div>
@@ -138,7 +247,7 @@
 										<div class="tooltip-row"><span class="tooltip-label"><span class="tooltip-dot dot-other"></span>Other</span><span>{formatMinutes(item.other)}</span></div>
 									{/if}
 								</div>
-								<div class="chart-stack">
+								<div class={`chart-stack ${item.week === currentWeekKey ? 'chart-stack-in-progress' : ''}`}>
 									{#if item.other > 0}
 										<div class="chart-bar bar-other" style="height: {barHeight(item.other, weeklyMax)}px"></div>
 									{/if}
@@ -152,9 +261,9 @@
 										<div class="chart-bar bar-running" style="height: {barHeight(item.running, weeklyMax)}px"></div>
 									{/if}
 								</div>
-								<span class="chart-label"
-									>{i % 4 === 0 ? formatYear(item.week) + ' ' + formatMonthShort(item.week) : ''}</span
-								>
+								<span class="chart-label">
+									{weeklyMonthLabelWeeks.has(item.week) ? formatMonthShort(item.week) : ''}
+								</span>
 							</div>
 						{/each}
 					</div>
@@ -173,7 +282,7 @@
 					<div class="chart-bars">
 						{#each data.charts.monthlyDistance as item, i (item.month)}
 							<div
-								class="chart-col"
+								class={`chart-col ${item.month === currentMonthKey ? 'in-progress-period' : ''}`}
 								data-tip="{formatMiles(item.miles)} · {formatMonth(item.month)}"
 							>
 								<div class="chart-bar" style="height: {barHeight(item.miles, monthlyMax)}px"></div>
@@ -196,7 +305,7 @@
 					<div class="chart-bars">
 						{#each data.charts.yearlyDistance as item (item.year)}
 							<div
-								class="chart-col"
+								class={`chart-col ${item.year === currentYearKey ? 'in-progress-period' : ''}`}
 								data-tip="{formatMiles(item.miles)} · {formatYear(item.year)}"
 							>
 								<div class="chart-bar" style="height: {barHeight(item.miles, yearlyMax)}px"></div>
@@ -296,6 +405,77 @@
 	/* Bar chart */
 	.chart-wrapper {
 		margin: 0.75rem 0 0.5rem;
+	}
+
+	.activity-columns-chart {
+		margin-top: 0.75rem;
+	}
+
+	.activity-day-groups {
+		width: 100%;
+		height: calc(var(--dashboard-compact-chart-height) + 16px);
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 3px;
+		padding-bottom: 2px;
+	}
+
+	.activity-day-group {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 2px;
+	}
+
+	.activity-day-columns {
+		width: 100%;
+		height: var(--dashboard-compact-chart-height);
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 2px;
+	}
+
+	.activity-col {
+		flex: 1 1 0;
+		min-width: 0;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+	}
+
+	.activity-column-bar {
+		width: 100%;
+		min-height: 2px;
+		border-radius: 3px 3px 0 0;
+		opacity: 0.8;
+		transition: opacity 100ms ease;
+	}
+
+	.activity-col:hover .activity-column-bar {
+		opacity: 1;
+	}
+
+	.activity-col .chart-tooltip {
+		bottom: calc(100% + 6px);
+	}
+
+	.activity-col-label {
+		font-size: 0.58rem;
+		line-height: 1;
+		color: var(--text-muted);
+	}
+
+	.tooltip-header-activity {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 
 	.chart-wrapper-sm .chart-bars {
@@ -420,6 +600,21 @@
 		justify-content: flex-end;
 		flex: 1;
 		min-height: 0;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.chart-stack-in-progress::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background-image: repeating-linear-gradient(
+			-45deg,
+			rgba(255, 255, 255, 0.42) 0 5px,
+			rgba(255, 255, 255, 0.12) 5px 10px
+		);
+		pointer-events: none;
+		border-radius: 3px 3px 0 0;
 	}
 
 	.chart-stack .chart-bar:last-child {
@@ -440,6 +635,15 @@
 		border-radius: 0;
 		opacity: 0.8;
 		transition: opacity 100ms ease;
+	}
+
+	.in-progress-period .chart-bar {
+		background-color: var(--color-running);
+		background-image: repeating-linear-gradient(
+			-45deg,
+			rgba(255, 255, 255, 0.42) 0 5px,
+			rgba(255, 255, 255, 0.12) 5px 10px
+		);
 	}
 
 	.bar-running {
