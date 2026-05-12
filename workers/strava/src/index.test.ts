@@ -96,7 +96,11 @@ describe('strava worker routes', () => {
   });
 
   it('GET /health returns a healthy response', async () => {
-    const response = await worker.fetch(new Request('http://localhost/health'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/health'),
+      env,
+      {} as ExecutionContext
+    );
     const body = await response.json<{
       ok: boolean;
       service: string;
@@ -108,13 +112,21 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/connect rejects missing token', async () => {
-    const response = await worker.fetch(new Request('http://localhost/strava/connect'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/connect'),
+      env,
+      {} as ExecutionContext
+    );
 
     expect(response.status).toBe(400);
   });
 
   it('GET /strava/connect rejects invalid signed token', async () => {
-    const response = await worker.fetch(new Request('http://localhost/strava/connect?token=invalid-token'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/connect?token=invalid-token'),
+      env,
+      {} as ExecutionContext
+    );
 
     expect(response.status).toBe(401);
   });
@@ -141,7 +153,11 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/callback rejects missing state', async () => {
-    const response = await worker.fetch(new Request('http://localhost/strava/callback?code=test-code'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/callback?code=test-code'),
+      env,
+      {} as ExecutionContext
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
@@ -150,7 +166,11 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/callback rejects missing code', async () => {
-    const response = await worker.fetch(new Request('http://localhost/strava/callback?state=test-state'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/callback?state=test-state'),
+      env,
+      {} as ExecutionContext
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('http://localhost:5173/settings?strava=error');
@@ -165,7 +185,11 @@ describe('strava worker routes', () => {
       expires_at: new Date(Date.now() - 1_000).toISOString(),
       used_at: null
     };
-    const response = await worker.fetch(new Request('http://localhost/strava/callback?state=expired-state&code=test-code'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/callback?state=expired-state&code=test-code'),
+      env,
+      {} as ExecutionContext
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
@@ -174,14 +198,22 @@ describe('strava worker routes', () => {
   });
 
   it('GET /strava/callback handles Strava denial', async () => {
-    const response = await worker.fetch(new Request('http://localhost/strava/callback?error=access_denied'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/callback?error=access_denied'),
+      env,
+      {} as ExecutionContext
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('http://localhost:5173/settings?strava=denied');
   });
 
   it('returns a JSON 404 for unknown routes', async () => {
-    const response = await worker.fetch(new Request('http://localhost/unknown'), env, {} as ExecutionContext);
+    const response = await worker.fetch(
+      new Request('http://localhost/unknown'),
+      env,
+      {} as ExecutionContext
+    );
     const body = await response.json<{
       ok: boolean;
       error: string;

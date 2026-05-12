@@ -164,7 +164,8 @@ export async function syncUserActivities(
     }
 
     const totalActivitiesFetched = (activeSyncRun.activities_fetched ?? 0) + activities.length;
-    const totalActivitiesUpserted = (activeSyncRun.activities_upserted ?? 0) + mappedActivities.length;
+    const totalActivitiesUpserted =
+      (activeSyncRun.activities_upserted ?? 0) + mappedActivities.length;
     const hasMore = isBackfillMode && activities.length >= BATCH_ACTIVITY_CAP;
     const nextCursorBefore = hasMore ? computeNextCursorBefore(activities) : null;
     const shouldContinue = hasMore && nextCursorBefore !== null;
@@ -301,7 +302,9 @@ export async function hasRecentRunningSync({
   userId: string;
   now?: Date;
 }): Promise<boolean> {
-  const runningSince = new Date(now.getTime() - RUNNING_SYNC_WINDOW_MINUTES * 60 * 1000).toISOString();
+  const runningSince = new Date(
+    now.getTime() - RUNNING_SYNC_WINDOW_MINUTES * 60 * 1000
+  ).toISOString();
   const { data: runningSync, error } = await supabase
     .from('sync_runs')
     .select('id')
