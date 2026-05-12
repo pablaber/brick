@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { ensureProfile } from '$lib/server/profiles';
 import {
+  DEFAULT_CATEGORY_COLORS,
   GOAL_DEFINITIONS,
   SPORT_CATEGORIES,
   deactivateGoal,
@@ -75,6 +76,7 @@ export const load: PageServerLoad = async (event) => {
     syncResult,
     settings: {
       colors: userSettings.colors,
+      defaultColors: DEFAULT_CATEGORY_COLORS,
       activeGoals: userSettings.activeGoals,
       categories: SPORT_CATEGORIES,
       goalDefinitions: Object.values(GOAL_DEFINITIONS)

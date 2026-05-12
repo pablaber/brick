@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
+	import { onMount, untrack } from 'svelte';
 	import { slide } from 'svelte/transition';
 
 	let { data, form } = $props();
@@ -21,7 +22,15 @@
 
 	let colorsOpen = $state(false);
 	let goalsOpen = $state(false);
-	let stravaOpen = $state(!data.strava.connected);
+	let stravaOpen = $state(untrack(() => !data.strava.connected));
+
+	let colorValues = $state(untrack(() => ({ ...data.settings.colors })));
+	let colorSaved = $state(false);
+	const colorIndicator = $derived.by(() => {
+		const hasUnsaved = data.settings.categories.some((c) => colorValues[c] !== data.settings.colors[c]);
+		if (hasUnsaved) return 'unsaved' as const;
+		return colorSaved ? 'saved' as const : 'idle' as const;
+	});
 
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastDismissing = $state(false);
@@ -62,14 +71,11 @@
 			dirty = true;
 		}
 
-		if (settingsForm?.scope === 'colors' && settingsForm.success) {
-			showToast(settingsForm.success, 'success');
-		}
-
 		if (dirty) {
 			window.history.replaceState({}, '', url.toString());
 		}
 	});
+
 
 	const stravaResultMessage: Record<string, string> = {
 		connected: 'Strava connected successfully.',
@@ -244,7 +250,12 @@
 			{#if settingsForm?.scope === 'colors' && settingsForm.error}
 				<p class="form-error">{settingsForm.error}</p>
 			{/if}
-			<form method="POST" action="?/saveSportColors" class="form-stack compact-form">
+			<form method="POST" action="?/saveSportColors" class="form-stack compact-form" use:enhance={() => {
+				return async ({ result, update }) => {
+					await update({ reset: false });
+					if (result.type === 'success') colorSaved = true;
+				};
+			}}>
 				<div class="color-grid">
 					{#each data.settings.categories as category (category)}
 						<label class="color-field">
@@ -253,14 +264,26 @@
 								class="color-input"
 								type="color"
 								name={category}
-								value={data.settings.colors[category]}
+								bind:value={colorValues[category]}
 								required
 							/>
-							<code>{data.settings.colors[category]}</code>
+							<code>{colorValues[category]}</code>
 						</label>
 					{/each}
 				</div>
-				<button type="submit" class="primary-button">Save Colors</button>
+				<div class="color-actions">
+					<button type="submit" class="primary-button">Save Colors</button>
+					<button type="button" class="secondary-button" onclick={() => {
+						colorValues = { ...data.settings.defaultColors };
+					}}>Reset to Defaults</button>
+					<span class="save-indicator" class:save-indicator-visible={colorIndicator !== 'idle'}>
+						{#if colorIndicator === 'unsaved'}
+							<span class="save-indicator-unsaved">Unsaved changes</span>
+						{:else if colorIndicator === 'saved'}
+							<span class="save-indicator-saved">Changes saved</span>
+						{/if}
+					</span>
+				</div>
 			</form>
 		</div>
 		</div>
@@ -294,7 +317,7 @@
 					{#if activeGoal}
 						<p class="metric-caption">Current target: {activeGoal.targetValue} {definition.unit}</p>
 					{/if}
-					<form method="POST" action="?/saveGoal" class="goal-form">
+					<form method="POST" action="?/saveGoal" class="goal-form" use:enhance={() => ({ update }) => update({ reset: false })}>
 						<input type="hidden" name="goalType" value={definition.goalType} />
 						<label>
 							<span>Target</span>
@@ -628,6 +651,47 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
+	}
+
+	.color-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.save-indicator {
+		font-size: 0.82rem;
+		font-weight: 500;
+		opacity: 0;
+		transition: opacity 200ms ease;
+	}
+
+	.save-indicator-visible {
+		opacity: 1;
+	}
+
+	.save-indicator-unsaved {
+		color: var(--text-muted);
+	}
+
+	.save-indicator-saved {
+		color: var(--ok);
+	}
+
+	.secondary-button {
+		border: 1px solid var(--line);
+		border-radius: 0.6rem;
+		padding: 0.65rem 0.8rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		background: #fff;
+		cursor: pointer;
+	}
+
+	.secondary-button:hover {
+		background: var(--surface-subtle);
+		border-color: var(--text-muted);
 	}
 
 	.card-heading {
