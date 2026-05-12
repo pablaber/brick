@@ -88,7 +88,10 @@
 	}
 </script>
 
-<section class="page">
+<section
+	class="page"
+	style={`--color-running: ${data.categoryColors.running}; --color-cycling: ${data.categoryColors.cycling}; --color-swimming: ${data.categoryColors.swimming}; --color-other: ${data.categoryColors.other};`}
+>
 	<header class="page-header">
 		<h1 class="page-title">Dashboard</h1>
 		{#if data.latestSyncRun?.completedAt}
@@ -126,6 +129,11 @@
 			<article class="card">
 				<h2>Running Miles This Year</h2>
 				<p class="metric">{formatMiles(data.stats.currentYearRunningMiles)}</p>
+				{#if data.stats.goals.yearlyRunningDistance}
+					<p class="metric-caption">
+						Goal: {formatMiles(data.stats.goals.yearlyRunningDistance.target)} ({data.stats.goals.yearlyRunningDistance.pct}%)
+					</p>
+				{/if}
 				{#if data.charts.runningProgress.length > 1}
 					<div
 						class="sparkline-wrapper"
@@ -210,7 +218,13 @@
 			<article class="card">
 				<h2>Workout Minutes This Week</h2>
 				<p class="metric">{formatMinutes(data.stats.thisWeekWorkoutMinutes)}</p>
-				<p class="metric-caption">Total training minutes this week</p>
+				{#if data.stats.goals.weeklyWorkoutMinutes}
+					<p class="metric-caption">
+						Goal: {formatMinutes(data.stats.goals.weeklyWorkoutMinutes.target)} ({data.stats.goals.weeklyWorkoutMinutes.pct}%)
+					</p>
+				{:else}
+					<p class="metric-caption">Total training minutes this week</p>
+				{/if}
 			</article>
 
 			<article class="card">
@@ -462,11 +476,11 @@
 	}
 
 	.dot-running-stroke {
-		stroke: var(--brand);
+		stroke: var(--color-running);
 	}
 
 	.dot-cycling-stroke {
-		stroke: #e8a838;
+		stroke: var(--color-cycling);
 	}
 
 	.sparkline-tip {
@@ -492,19 +506,19 @@
 	}
 
 	.sparkline-running {
-		fill: var(--brand);
+		fill: var(--color-running);
 	}
 
 	.sparkline-running-line {
-		stroke: var(--brand);
+		stroke: var(--color-running);
 	}
 
 	.sparkline-cycling {
-		fill: #e8a838;
+		fill: var(--color-cycling);
 	}
 
 	.sparkline-cycling-line {
-		stroke: #e8a838;
+		stroke: var(--color-cycling);
 	}
 
 	/* Bar chart */
@@ -589,19 +603,19 @@
 	}
 
 	.dot-running {
-		background: var(--brand);
+		background: var(--color-running);
 	}
 
 	.dot-cycling {
-		background: #e8a838;
+		background: var(--color-cycling);
 	}
 
 	.dot-swimming {
-		background: #38bdf8;
+		background: var(--color-swimming);
 	}
 
 	.dot-other {
-		background: #8b5cf6;
+		background: var(--color-other);
 	}
 
 	/* Simple text tooltip (monthly/yearly charts) */
@@ -650,26 +664,26 @@
 
 	.chart-bar {
 		width: 100%;
-		background: var(--brand);
+		background: var(--color-running);
 		border-radius: 0;
 		opacity: 0.8;
 		transition: opacity 100ms ease;
 	}
 
 	.bar-running {
-		background: var(--brand);
+		background: var(--color-running);
 	}
 
 	.bar-cycling {
-		background: #e8a838;
+		background: var(--color-cycling);
 	}
 
 	.bar-swimming {
-		background: #38bdf8;
+		background: var(--color-swimming);
 	}
 
 	.bar-other {
-		background: #8b5cf6;
+		background: var(--color-other);
 	}
 
 	.chart-col:hover .chart-bar {
@@ -699,19 +713,19 @@
 	}
 
 	.legend-running {
-		background: var(--brand);
+		background: var(--color-running);
 	}
 
 	.legend-cycling {
-		background: #e8a838;
+		background: var(--color-cycling);
 	}
 
 	.legend-swimming {
-		background: #38bdf8;
+		background: var(--color-swimming);
 	}
 
 	.legend-other {
-		background: #8b5cf6;
+		background: var(--color-other);
 	}
 
 	.chart-label {

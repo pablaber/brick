@@ -2,7 +2,14 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
+	type SettingsFormFeedback = {
+		scope: 'colors' | 'goals';
+		error?: string;
+		success?: string;
+		goalType?: string;
+	};
+	const settingsForm = $derived((form?.settingsForm as SettingsFormFeedback | undefined) ?? null);
 	let isSyncing = $state(false);
 	let syncProgressFetched = $state(0);
 	let syncProgressTotal = $state<number | null>(null);
@@ -107,6 +114,10 @@
 		return Math.max(1, Math.ceil(total * ESTIMATED_ACTIVITY_BUFFER_MULTIPLIER));
 	}
 
+	function formatCategoryName(category: string): string {
+		return category.charAt(0).toUpperCase() + category.slice(1);
+	}
+
 	async function onSyncSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		if (isSyncing) {
@@ -208,6 +219,91 @@
 				<strong>{data.displayName ?? 'Not set'}</strong>
 			</li>
 		</ul>
+	</div>
+
+	<div class="card card-sectioned">
+		<div class="card-heading">
+			<h2>Sport Colors</h2>
+		</div>
+		<div class="settings-block">
+			<p class="metric-caption">Customize dashboard category colors.</p>
+			{#if settingsForm?.scope === 'colors' && settingsForm.error}
+				<p class="form-error">{settingsForm.error}</p>
+			{/if}
+			{#if settingsForm?.scope === 'colors' && settingsForm.success}
+				<p class="note note-success">{settingsForm.success}</p>
+			{/if}
+			<form method="POST" action="?/saveSportColors" class="form-stack compact-form">
+				<div class="color-grid">
+					{#each data.settings.categories as category (category)}
+						<label class="color-field">
+							<span>{formatCategoryName(category)}</span>
+							<input
+								class="color-input"
+								type="color"
+								name={category}
+								value={data.settings.colors[category]}
+								required
+							/>
+							<code>{data.settings.colors[category]}</code>
+						</label>
+					{/each}
+				</div>
+				<button type="submit" class="primary-button">Save Colors</button>
+			</form>
+		</div>
+	</div>
+
+	<div class="card card-sectioned">
+		<div class="card-heading">
+			<h2>Goals</h2>
+		</div>
+		<div class="settings-block goals-stack">
+			<p class="metric-caption">Set optional goals that appear on the dashboard.</p>
+			{#if settingsForm?.scope === 'goals' && settingsForm.error}
+				<p class="form-error">{settingsForm.error}</p>
+			{/if}
+			{#if settingsForm?.scope === 'goals' && settingsForm.success}
+				<p class="note note-success">{settingsForm.success}</p>
+			{/if}
+			{#each data.settings.goalDefinitions as definition (definition.goalType)}
+				{@const activeGoal = data.settings.activeGoals[definition.goalType]}
+				<div class="goal-row">
+					<div class="goal-head">
+						<strong>{definition.label}</strong>
+						<span class="goal-meta">{definition.period} · {definition.unit}</span>
+					</div>
+					{#if activeGoal}
+						<p class="metric-caption">Current target: {activeGoal.targetValue} {definition.unit}</p>
+					{/if}
+					<form method="POST" action="?/saveGoal" class="goal-form">
+						<input type="hidden" name="goalType" value={definition.goalType} />
+						<label>
+							<span>Target</span>
+							<input
+								class="text-input"
+								type="number"
+								name="targetValue"
+								step={definition.step}
+								min={definition.min}
+								max={definition.max}
+								value={activeGoal?.targetValue ?? ''}
+								placeholder={`Enter ${definition.unit}`}
+								required
+							/>
+						</label>
+						<div class="goal-actions">
+							<button type="submit" class="primary-button">Save Goal</button>
+							{#if activeGoal}
+								<button type="submit" class="destructive-button" name="mode" value="deactivate">
+									Remove Goal
+								</button>
+							{/if}
+						</div>
+					</form>
+				</div>
+			{/each}
+		</div>
 	</div>
 
 	<div class="card card-sectioned">
@@ -428,6 +524,82 @@
 
 	.card-sectioned > :last-child {
 		padding-bottom: 1rem;
+	}
+
+	.settings-block {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.compact-form {
+		margin-top: 0;
+	}
+
+	.color-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 0.75rem;
+	}
+
+	.color-field {
+		display: grid;
+		gap: 0.4rem;
+	}
+
+	.color-field code {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.color-input {
+		width: 100%;
+		height: 2.4rem;
+		border: 1px solid var(--line);
+		border-radius: 0.5rem;
+		background: transparent;
+		padding: 0.15rem;
+	}
+
+	.goals-stack {
+		gap: 1rem;
+	}
+
+	.goal-row {
+		border: 1px solid var(--line);
+		border-radius: 0.75rem;
+		padding: 0.75rem;
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.goal-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.goal-meta {
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--text-muted);
+	}
+
+	.goal-form {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.goal-form label {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.goal-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
 	}
 
 	.card-heading {

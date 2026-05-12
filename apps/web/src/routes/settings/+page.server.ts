@@ -1,6 +1,18 @@
+import { fail } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { ensureProfile } from '$lib/server/profiles';
-import type { PageServerLoad } from './$types';
+import {
+  GOAL_DEFINITIONS,
+  SPORT_CATEGORIES,
+  deactivateGoal,
+  loadUserSettings,
+  parseGoalType,
+  upsertGoal,
+  upsertSportCategoryColors,
+  validateCategoryColors,
+  validateGoalTarget
+} from '$lib/server/user-settings';
+import type { Actions, PageServerLoad } from './$types';
 
 const STRAVA_RESULTS = new Set(['connected', 'denied', 'invalid_state', 'error']);
 const SYNC_RESULTS = new Set(['success', 'error', 'running', 'not_connected']);
@@ -47,6 +59,8 @@ export const load: PageServerLoad = async (event) => {
     .limit(1)
     .maybeSingle();
 
+  const userSettings = await loadUserSettings(event.locals.supabase, user.id);
+
   const stravaResultQuery = event.url.searchParams.get('strava');
   const stravaResult =
     stravaResultQuery && STRAVA_RESULTS.has(stravaResultQuery) ? stravaResultQuery : null;
@@ -59,6 +73,12 @@ export const load: PageServerLoad = async (event) => {
     displayName: profile?.display_name ?? null,
     stravaResult,
     syncResult,
+    settings: {
+      colors: userSettings.colors,
+      activeGoals: userSettings.activeGoals,
+      categories: SPORT_CATEGORIES,
+      goalDefinitions: Object.values(GOAL_DEFINITIONS)
+    },
     strava: stravaConnection
       ? {
           connected: true,
@@ -110,4 +130,105 @@ export const load: PageServerLoad = async (event) => {
         }
       : null
   };
+};
+
+export const actions: Actions = {
+  saveSportColors: async (event) => {
+    const user = await requireUser(event);
+    const formData = await event.request.formData();
+
+    const parsed = validateCategoryColors({
+      running: formData.get('running')?.toString(),
+      cycling: formData.get('cycling')?.toString(),
+      swimming: formData.get('swimming')?.toString(),
+      other: formData.get('other')?.toString()
+    });
+
+    if (parsed.error || !parsed.colors) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'colors',
+          error: parsed.error ?? 'Invalid color values.'
+        }
+      });
+    }
+
+    try {
+      await upsertSportCategoryColors(event.locals.supabase, user.id, parsed.colors);
+      return {
+        settingsForm: {
+          scope: 'colors',
+          success: 'Sport colors updated.'
+        }
+      };
+    } catch (error) {
+      console.error('Unable to save sport colors', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'colors',
+          error: 'Unable to save sport colors right now.'
+        }
+      });
+    }
+  },
+
+  saveGoal: async (event) => {
+    const user = await requireUser(event);
+    const formData = await event.request.formData();
+
+    const goalType = parseGoalType(formData.get('goalType'));
+    if (!goalType) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'goals',
+          error: 'Invalid goal type.'
+        }
+      });
+    }
+
+    const mode = formData.get('mode')?.toString();
+
+    try {
+      if (mode === 'deactivate') {
+        await deactivateGoal(event.locals.supabase, user.id, goalType);
+        return {
+          settingsForm: {
+            scope: 'goals',
+            success: `${GOAL_DEFINITIONS[goalType].label} goal removed.`
+          }
+        };
+      }
+
+      const rawTarget = formData.get('targetValue')?.toString() ?? '';
+      const validation = validateGoalTarget(goalType, rawTarget);
+
+      if (validation.error || validation.value == null) {
+        return fail(400, {
+          settingsForm: {
+            scope: 'goals',
+            goalType,
+            error: validation.error ?? 'Invalid goal target.'
+          }
+        });
+      }
+
+      await upsertGoal(event.locals.supabase, user.id, goalType, validation.value);
+
+      return {
+        settingsForm: {
+          scope: 'goals',
+          success: `${GOAL_DEFINITIONS[goalType].label} goal saved.`
+        }
+      };
+    } catch (error) {
+      console.error('Unable to save goal', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'goals',
+          goalType,
+          error: 'Unable to save goal right now.'
+        }
+      });
+    }
+  }
 };

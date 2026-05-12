@@ -9,6 +9,7 @@ import {
   getWeeklySportBreakdown,
   getYearlyRunningDistance
 } from '$lib/server/dashboard';
+import { loadUserSettings } from '$lib/server/user-settings';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -24,7 +25,8 @@ export const load: PageServerLoad = async (event) => {
     monthlyDistanceResult,
     yearlyDistanceResult,
     weeklySportBreakdownResult,
-    activityCountResult
+    activityCountResult,
+    settingsResult
   ] = await Promise.allSettled([
     getStravaConnectionStatus(supabase, userId),
     getLatestSyncRun(supabase, userId),
@@ -33,7 +35,8 @@ export const load: PageServerLoad = async (event) => {
     getMonthlyDistanceBySport(supabase, userId),
     getYearlyRunningDistance(supabase, userId),
     getWeeklySportBreakdown(supabase, userId, 53),
-    getActivityCount(supabase, userId)
+    getActivityCount(supabase, userId),
+    loadUserSettings(supabase, userId)
   ]);
 
   const connection =
@@ -54,6 +57,18 @@ export const load: PageServerLoad = async (event) => {
     weeklySportBreakdownResult.status === 'fulfilled' ? weeklySportBreakdownResult.value : [];
   const activityCount =
     activityCountResult.status === 'fulfilled' ? activityCountResult.value : null;
+  const userSettings =
+    settingsResult.status === 'fulfilled'
+      ? settingsResult.value
+      : {
+          colors: {
+            running: '#0D6EFD',
+            cycling: '#E8A838',
+            swimming: '#38BDF8',
+            other: '#8B5CF6'
+          },
+          activeGoals: {}
+        };
 
   // Current year running miles
   const currentYear = new Date().getFullYear().toString();
@@ -203,6 +218,12 @@ export const load: PageServerLoad = async (event) => {
     }))
     .sort((a, b) => b.minutes - a.minutes);
 
+  const yearlyRunningGoal = userSettings.activeGoals.yearly_running_distance;
+  const weeklyWorkoutGoal = userSettings.activeGoals.weekly_workout_minutes;
+
+  const runningCurrent = currentYearRunningMiles ?? 0;
+  const weeklyCurrent = thisWeekWorkoutMinutes ?? 0;
+
   return {
     connection,
     latestSyncRun,
@@ -210,8 +231,27 @@ export const load: PageServerLoad = async (event) => {
       currentYearRunningMiles,
       currentYearCyclingMiles,
       thisWeekWorkoutMinutes,
-      syncedActivityCount: activityCount
+      syncedActivityCount: activityCount,
+      goals: {
+        yearlyRunningDistance: yearlyRunningGoal
+          ? {
+              target: yearlyRunningGoal.targetValue,
+              current: runningCurrent,
+              unit: yearlyRunningGoal.unit,
+              pct: Math.round((runningCurrent / yearlyRunningGoal.targetValue) * 100)
+            }
+          : null,
+        weeklyWorkoutMinutes: weeklyWorkoutGoal
+          ? {
+              target: weeklyWorkoutGoal.targetValue,
+              current: weeklyCurrent,
+              unit: weeklyWorkoutGoal.unit,
+              pct: Math.round((weeklyCurrent / weeklyWorkoutGoal.targetValue) * 100)
+            }
+          : null
+      }
     },
+    categoryColors: userSettings.colors,
     charts: {
       weeklyMinutes: weeklyMinutesChart,
       monthlyDistance: monthlyDistanceChart,
