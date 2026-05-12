@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Bungee&display=swap');
 @import 'tailwindcss';
 
 :root {
@@ -59,10 +60,27 @@ a {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--brand-strong);
+}
+
+.brand-logo {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+}
+
+.brand-label {
+  font-family: 'Bungee', 'Avenir Next', 'Segoe UI', sans-serif;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .nav {

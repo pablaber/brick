@@ -1,8 +1,7 @@
 <script lang="ts">
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
-	import { resolve } from '$app/paths';
+	import { base, resolve } from '$app/paths';
 
 	let { children } = $props();
 
@@ -15,14 +14,19 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/png" sizes="16x16" href={`${base}/logos/brick-16.png`} />
+	<link rel="icon" type="image/png" sizes="32x32" href={`${base}/logos/brick-32.png`} />
+	<link rel="apple-touch-icon" sizes="180x180" href={`${base}/logos/brick-180.png`} />
 	<title>Workout Dashboard</title>
 </svelte:head>
 
 <div class="app-shell">
 	<header class="topbar">
 		<div class="container topbar-inner">
-			<a class="brand" href={resolve('/')}>Lyon Workout</a>
+			<a class="brand" href={resolve('/')}>
+				<img class="brand-logo" src={`${base}/logos/brick-64.png`} alt="Brick logo" />
+				<span class="brand-label">Brick</span>
+			</a>
 			<nav class="nav" aria-label="Primary">
 				{#if user}
 					<a
