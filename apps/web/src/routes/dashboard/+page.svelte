@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { fly } from 'svelte/transition';
 	import PoweredByStrava from '$lib/components/PoweredByStrava.svelte';
 	import { DASHBOARD_COMPACT_CHART_HEIGHT_PX } from '$lib/components/dashboard/constants';
 	import YearlyDistanceGoalCard from '$lib/components/dashboard/YearlyDistanceGoalCard.svelte';
@@ -80,28 +81,30 @@
 	})();
 	const currentMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
 	const currentYearKey = `${now.getUTCFullYear()}-01-01`;
-	const thisWeekActivities = $derived.by(() =>
+	const weeklyActivities = $derived.by(() =>
 		data.recentActivities
 			.flatMap((activity) => {
 				const startDate = activity.startDate;
 				const movingTimeSeconds = activity.movingTimeSeconds ?? 0;
 				const weekdayIndex = startDate ? weekdayIndexMonday(startDate) : null;
+				const weekKey = startDate ? weekStartKey(startDate) : null;
 				if (
 					!startDate ||
+					!weekKey ||
 					weekdayIndex === null ||
-					movingTimeSeconds <= 0 ||
-					weekStartKey(startDate) !== currentWeekKey
+					movingTimeSeconds <= 0
 				) {
 					return [];
 				}
-					return [
-						{
-							id: activity.id,
-							stravaActivityId: activity.stravaActivityId,
-							name: activity.name?.trim() || 'Untitled',
-							startDate,
-							weekdayIndex,
-							category: activityCategory(activity.sportType),
+				return [
+					{
+						id: activity.id,
+						stravaActivityId: activity.stravaActivityId,
+						name: activity.name?.trim() || 'Untitled',
+						startDate,
+						weekKey,
+						weekdayIndex,
+						category: activityCategory(activity.sportType),
 						minutes: movingTimeSeconds / 60
 					}
 				];
@@ -110,21 +113,68 @@
 				(a, b) =>
 					a.weekdayIndex - b.weekdayIndex ||
 					a.startDate.localeCompare(b.startDate) ||
-					a.id.localeCompare(b.id)
-			)
+						a.id.localeCompare(b.id)
+				)
 	);
-	const thisWeekDayColumns = $derived.by(() => {
+	const availableWeekKeys = $derived.by(() => {
+		const weekKeys = new Set(
+			weeklyActivities.filter((activity) => activity.weekKey <= currentWeekKey).map((activity) => activity.weekKey)
+		);
+		weekKeys.add(currentWeekKey);
+		return [...weekKeys].sort((a, b) => a.localeCompare(b));
+	});
+	let selectedWeekKey = $state(currentWeekKey);
+	let weekSlideDirection = $state(1);
+
+	$effect(() => {
+		if (availableWeekKeys.length === 0) {
+			selectedWeekKey = currentWeekKey;
+			return;
+		}
+		if (!availableWeekKeys.includes(selectedWeekKey)) {
+			selectedWeekKey = availableWeekKeys[availableWeekKeys.length - 1];
+		}
+	});
+
+	const selectedWeekActivities = $derived.by(() =>
+		weeklyActivities.filter((activity) => activity.weekKey === selectedWeekKey)
+	);
+	const selectedWeekDayColumns = $derived.by(() => {
 		const groups = WEEKDAY_LABELS.map((weekdayLabel, weekdayIndex) => ({
 			weekdayIndex,
 			weekdayLabel,
-			activities: [] as Array<(typeof thisWeekActivities)[number]>
+			activities: [] as Array<(typeof selectedWeekActivities)[number]>,
+			totalMinutes: 0
 		}));
-		for (const activity of thisWeekActivities) {
+		for (const activity of selectedWeekActivities) {
 			groups[activity.weekdayIndex].activities.push(activity);
+			groups[activity.weekdayIndex].totalMinutes += activity.minutes;
 		}
 		return groups;
 	});
-	const thisWeekActivityMax = $derived(Math.max(...thisWeekActivities.map((activity) => activity.minutes), 1));
+	const selectedWeekDayMax = $derived(
+		Math.max(...selectedWeekDayColumns.map((day) => day.totalMinutes), 1)
+	);
+	const selectedWeekIndex = $derived(availableWeekKeys.indexOf(selectedWeekKey));
+	const canGoToPreviousWeek = $derived(selectedWeekIndex > 0);
+	const canGoToNextWeek = $derived(
+		selectedWeekIndex >= 0 && selectedWeekIndex < availableWeekKeys.length - 1
+	);
+	const selectedWeekTotalMinutes = $derived(
+		selectedWeekActivities.reduce((sum, activity) => sum + activity.minutes, 0)
+	);
+
+	function showPreviousWeek(): void {
+		if (!canGoToPreviousWeek) return;
+		weekSlideDirection = -1;
+		selectedWeekKey = availableWeekKeys[selectedWeekIndex - 1];
+	}
+
+	function showNextWeek(): void {
+		if (!canGoToNextWeek) return;
+		weekSlideDirection = 1;
+		selectedWeekKey = availableWeekKeys[selectedWeekIndex + 1];
+	}
 </script>
 
 <section
@@ -174,67 +224,110 @@
 				progress={data.charts.swimmingProgress}
 				goal={data.stats.goals.yearlySwimmingDistance}
 				color={data.categoryColors.swimming}
-			/>
-			<article class="card">
-				<h2>Workout Minutes This Week</h2>
-				<p class="metric">{formatMinutes(data.stats.thisWeekWorkoutMinutes)}</p>
-				{#if data.stats.goals.weeklyWorkoutMinutes}
-					<p class="metric-caption">
-						Goal: {formatMinutes(data.stats.goals.weeklyWorkoutMinutes.target)} ({data.stats.goals.weeklyWorkoutMinutes.pct}%)
-					</p>
-				{/if}
-					{#if thisWeekActivities.length > 0}
-						<div
-							class="activity-columns-chart"
-							style={`--dashboard-compact-chart-height: ${DASHBOARD_COMPACT_CHART_HEIGHT_PX}px`}
-						>
-							<div class="activity-day-groups">
-								{#each thisWeekDayColumns as day (day.weekdayIndex)}
-									<div class="activity-day-group">
-										<div class="activity-day-columns">
-											{#each day.activities as activity (activity.id)}
-												{#if activity.stravaActivityId}
-													<a
-														href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
-														target="_blank"
-														rel="noopener noreferrer"
-														class="activity-col activity-col-link has-tooltip"
-													>
-														<div class="chart-tooltip">
-															<div class="tooltip-header tooltip-header-activity">
-																<span class={`tooltip-dot dot-${activity.category}`}></span>
-																<span>{activity.name}</span>
-															</div>
-															<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
-														</div>
-														<div
-															class={`activity-column-bar bar-${activity.category}`}
-															style={`height: ${barHeight(activity.minutes, thisWeekActivityMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
-														></div>
-													</a>
-												{:else}
-													<div class="activity-col has-tooltip">
-														<div class="chart-tooltip">
-															<div class="tooltip-header tooltip-header-activity">
-																<span class={`tooltip-dot dot-${activity.category}`}></span>
-																<span>{activity.name}</span>
-															</div>
-															<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
-														</div>
-														<div
-															class={`activity-column-bar bar-${activity.category}`}
-															style={`height: ${barHeight(activity.minutes, thisWeekActivityMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
-														></div>
-													</div>
-												{/if}
-											{/each}
-										</div>
-										<span class="activity-col-label">{day.weekdayLabel}</span>
-									</div>
-								{/each}
-							</div>
+				/>
+				<article class="card workout-duration-card">
+						<div class="card-header-with-controls">
+							<h2>
+								{selectedWeekKey === currentWeekKey
+									? 'Workout Duration This Week'
+									: `Workout Duration: Week of ${formatWeek(selectedWeekKey)}`}
+							</h2>
+							<div class="week-nav-controls" aria-label="Week navigation">
+							<button
+								type="button"
+								class="week-nav-button"
+								onclick={showPreviousWeek}
+								disabled={!canGoToPreviousWeek}
+								aria-label="Show previous week"
+							>
+								<svg class="week-nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+									<path d="M11.5 4.5 6 10l5.5 5.5" />
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="week-nav-button"
+								onclick={showNextWeek}
+								disabled={!canGoToNextWeek}
+								aria-label="Show next week"
+							>
+								<svg class="week-nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+									<path d="m8.5 4.5 5.5 5.5-5.5 5.5" />
+								</svg>
+							</button>
 						</div>
+						</div>
+						<p class="metric">{formatMinutes(selectedWeekTotalMinutes)}</p>
+						{#if data.stats.goals.weeklyWorkoutMinutes}
+							<p class="metric-caption">
+							Goal: {formatMinutes(data.stats.goals.weeklyWorkoutMinutes.target)} ({data.stats.goals.weeklyWorkoutMinutes.pct}%)
+						</p>
 					{/if}
+					<div
+						class="activity-week-viewport"
+						style={`--dashboard-compact-chart-height: ${DASHBOARD_COMPACT_CHART_HEIGHT_PX}px`}
+					>
+						{#key selectedWeekKey}
+							<div
+								class="activity-week-panel"
+								in:fly={{ x: weekSlideDirection * 40, duration: 180, opacity: 1 }}
+								out:fly={{ x: weekSlideDirection * -40, duration: 180, opacity: 1 }}
+							>
+								<div class="activity-columns-chart">
+									<div class="activity-day-groups">
+										{#each selectedWeekDayColumns as day (day.weekdayIndex)}
+											<div class="activity-day-group">
+												<div
+													class="activity-day-stack"
+													style={`height: ${barHeight(day.totalMinutes, selectedWeekDayMax, DASHBOARD_COMPACT_CHART_HEIGHT_PX)}px`}
+												>
+													{#each day.activities as activity (activity.id)}
+														{#if activity.stravaActivityId}
+															<a
+																href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
+																target="_blank"
+																rel="noopener noreferrer"
+																class="activity-segment activity-segment-link has-tooltip"
+																style={`flex-grow: ${Math.max(activity.minutes, 1)}`}
+															>
+																<div class="chart-tooltip">
+																	<div class="tooltip-header tooltip-header-activity">
+																		<span class={`tooltip-dot dot-${activity.category}`}></span>
+																		<span>{activity.name}</span>
+																	</div>
+																	<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
+																</div>
+																<div
+																	class={`activity-column-bar bar-${activity.category}`}
+																></div>
+															</a>
+														{:else}
+															<div
+																class="activity-segment has-tooltip"
+																style={`flex-grow: ${Math.max(activity.minutes, 1)}`}
+															>
+																<div class="chart-tooltip">
+																	<div class="tooltip-header tooltip-header-activity">
+																		<span class={`tooltip-dot dot-${activity.category}`}></span>
+																		<span>{activity.name}</span>
+																	</div>
+																	<div class="tooltip-total">{formatMinutes(activity.minutes)}</div>
+																</div>
+																<div
+																	class={`activity-column-bar bar-${activity.category}`}
+																></div>
+															</div>
+														{/if}
+													{/each}
+												</div>
+												<span class="activity-col-label">{day.weekdayLabel}</span>
+											</div>
+										{/each}
+									</div>
+								</div>
+							</div>
+						{/key}
+					</div>
 				</article>
 
 		</div>
@@ -430,7 +523,81 @@
 	}
 
 	.activity-columns-chart {
+		margin-top: 0;
+	}
+
+	.card-header-with-controls {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.workout-duration-card {
+		position: relative;
+		z-index: 5;
+	}
+
+	.week-nav-controls {
+		display: inline-flex;
+		gap: 0.35rem;
+	}
+
+	.week-nav-button {
+		appearance: none;
+		width: 1.65rem;
+		height: 1.65rem;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: var(--surface-subtle);
+		color: var(--text-muted);
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: background-color 100ms ease, color 100ms ease, border-color 100ms ease;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.week-nav-icon {
+		width: 0.78rem;
+		height: 0.78rem;
+		display: block;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.week-nav-button:focus,
+	.week-nav-button:focus-visible {
+		outline: none;
+		box-shadow: none;
+	}
+
+	.week-nav-button:hover:not(:disabled) {
+		background: var(--surface);
+		color: var(--text);
+		border-color: var(--line-strong);
+	}
+
+	.week-nav-button:disabled {
+		cursor: not-allowed;
+		opacity: 0.45;
+	}
+
+	.activity-week-viewport {
 		margin-top: 0.75rem;
+		position: relative;
+		overflow: visible;
+		height: calc(var(--dashboard-compact-chart-height) + 18px);
+	}
+
+	.activity-week-panel {
+		position: absolute;
+		inset: 0;
+		width: 100%;
 	}
 
 	.activity-day-groups {
@@ -453,26 +620,24 @@
 		gap: 2px;
 	}
 
-	.activity-day-columns {
+	.activity-day-stack {
 		width: 100%;
-		height: var(--dashboard-compact-chart-height);
 		display: flex;
-		align-items: flex-end;
-		justify-content: center;
-		gap: 2px;
+		flex-direction: column-reverse;
+		align-items: stretch;
+		justify-content: flex-end;
+		overflow: visible;
+		border-radius: 3px 3px 0 0;
 	}
 
-	.activity-col {
-		flex: 1 1 0;
-		min-width: 0;
+	.activity-segment {
+		flex: 1 1 auto;
 		position: relative;
 		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: flex-end;
+		min-height: 2px;
 	}
 
-	.activity-col-link {
+	.activity-segment-link {
 		text-decoration: none;
 		cursor: pointer;
 	}
@@ -480,20 +645,24 @@
 	.activity-column-bar {
 		width: 100%;
 		min-height: 2px;
-		border-radius: 3px 3px 0 0;
+		border-radius: 0;
 		opacity: 0.8;
 		transition: opacity 100ms ease;
 	}
 
-	.activity-col-link .activity-column-bar {
+	.activity-segment:last-child .activity-column-bar {
+		border-radius: 3px 3px 0 0;
+	}
+
+	.activity-segment-link .activity-column-bar {
 		cursor: pointer;
 	}
 
-	.activity-col:hover .activity-column-bar {
+	.activity-segment:hover .activity-column-bar {
 		opacity: 1;
 	}
 
-	.activity-col .chart-tooltip {
+	.activity-segment .chart-tooltip {
 		bottom: calc(100% + 6px);
 	}
 
