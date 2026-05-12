@@ -156,6 +156,63 @@ describe('runScheduledSync', () => {
     expect(summary.usersSynced).toBe(1);
   });
 
+  it('continues a paginated scheduled sync until the run completes', async () => {
+    mockState.connections = [{ user_id: 'u1', last_synced_at: null }];
+    vi.mocked(syncUserActivities)
+      .mockResolvedValueOnce({
+        ok: true,
+        statusCode: 200,
+        syncType: 'scheduled',
+        syncRunId: 'run-1',
+        batchActivitiesFetched: 100,
+        totalActivitiesFetched: 100,
+        activitiesUpserted: 100,
+        totalActivitiesUpserted: 100,
+        hasMore: true,
+        nextCursorBefore: 1_778_832_000,
+        estimatedTotalActivities: 250,
+        lastSyncedAt: null,
+        skipped: false,
+        skipReason: null,
+        error: null
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        statusCode: 200,
+        syncType: 'scheduled',
+        syncRunId: 'run-1',
+        batchActivitiesFetched: 75,
+        totalActivitiesFetched: 175,
+        activitiesUpserted: 75,
+        totalActivitiesUpserted: 175,
+        hasMore: false,
+        nextCursorBefore: null,
+        estimatedTotalActivities: 250,
+        lastSyncedAt: '2026-05-11T20:00:00.000Z',
+        skipped: false,
+        skipReason: null,
+        error: null
+      });
+
+    const summary = await runScheduledSync({
+      env,
+      controller,
+      now: new Date('2026-05-11T20:00:00.000Z')
+    });
+
+    expect(summary.usersSynced).toBe(1);
+    expect(summary.usersFailed).toBe(0);
+    expect(syncUserActivities).toHaveBeenCalledTimes(2);
+    expect(syncUserActivities).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        cursorBefore: 1_778_832_000,
+        requestedSyncRunId: 'run-1',
+        estimatedTotalActivities: 250
+      })
+    );
+  });
+
   it('counts skipped users in summary', async () => {
     mockState.connections = [{ user_id: 'u1', last_synced_at: null }];
     vi.mocked(syncUserActivities).mockResolvedValue({

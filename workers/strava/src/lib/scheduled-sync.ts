@@ -97,34 +97,63 @@ export async function runScheduledSync({
 
   for (const user of users) {
     try {
-      const result = await syncUserActivities({
-        env,
-        userId: user.userId,
-        syncType: 'scheduled',
-        triggeredBy: 'cron',
-        now,
-        minSyncIntervalHours
-      });
+      let cursorBefore: number | null = null;
+      let requestedSyncRunId: string | undefined;
+      let estimatedTotalActivities: number | null = null;
 
-      if (!result.ok) {
-        usersFailed += 1;
-        console.error(
-          'Scheduled sync failed for user.',
-          JSON.stringify({
-            userId: user.userId,
-            statusCode: result.statusCode,
-            error: result.error
-          })
-        );
-        continue;
+      while (true) {
+        const result = await syncUserActivities({
+          env,
+          userId: user.userId,
+          syncType: 'scheduled',
+          triggeredBy: 'cron',
+          now,
+          cursorBefore,
+          requestedSyncRunId,
+          estimatedTotalActivities,
+          minSyncIntervalHours
+        });
+
+        if (!result.ok) {
+          usersFailed += 1;
+          console.error(
+            'Scheduled sync failed for user.',
+            JSON.stringify({
+              userId: user.userId,
+              statusCode: result.statusCode,
+              error: result.error
+            })
+          );
+          break;
+        }
+
+        if (result.skipped) {
+          usersSkipped += 1;
+          break;
+        }
+
+        if (!result.hasMore) {
+          usersSynced += 1;
+          break;
+        }
+
+        if (result.nextCursorBefore === null || !result.syncRunId) {
+          usersFailed += 1;
+          console.error(
+            'Scheduled sync returned incomplete pagination state.',
+            JSON.stringify({
+              userId: user.userId,
+              syncRunId: result.syncRunId,
+              nextCursorBefore: result.nextCursorBefore
+            })
+          );
+          break;
+        }
+
+        cursorBefore = result.nextCursorBefore;
+        requestedSyncRunId = result.syncRunId;
+        estimatedTotalActivities = result.estimatedTotalActivities;
       }
-
-      if (result.skipped) {
-        usersSkipped += 1;
-        continue;
-      }
-
-      usersSynced += 1;
     } catch (error) {
       usersFailed += 1;
       console.error(
