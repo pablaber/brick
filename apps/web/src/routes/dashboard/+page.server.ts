@@ -62,19 +62,56 @@ export const load: PageServerLoad = async (event) => {
   );
   const currentYearRunningMiles = currentYearRow?.total_distance_miles ?? null;
 
-  // Weekly minutes: aggregate by week, then find most recent week
-  const weekMap = new Map<string, number>();
-  for (const row of weeklyActivityMinutes) {
-    if (row.week_start && row.total_moving_minutes) {
-      weekMap.set(row.week_start, (weekMap.get(row.week_start) ?? 0) + row.total_moving_minutes);
+  const runningSports = new Set(['Run', 'TrailRun', 'VirtualRun']);
+  const cyclingSports = new Set(['Ride', 'VirtualRide', 'GravelRide', 'EBikeRide', 'MountainBikeRide']);
+  const swimmingSports = new Set(['Swim', 'OpenWaterSwimming']);
+
+  // Current year cycling miles
+  let currentYearCyclingMiles = 0;
+  for (const row of monthlyDistanceBySport) {
+    if (
+      row.month_start?.startsWith(currentYear) &&
+      cyclingSports.has(row.sport_type ?? '') &&
+      row.total_distance_miles
+    ) {
+      currentYearCyclingMiles += row.total_distance_miles;
     }
   }
-  const sortedWeeks = [...weekMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const thisWeekWorkoutMinutes =
-    sortedWeeks.length > 0 ? sortedWeeks[sortedWeeks.length - 1][1] : null;
+
+  // Weekly minutes: aggregate by week and sport category
+  type WeekEntry = { running: number; cycling: number; swimming: number; other: number };
+  const weekBreakdown = new Map<string, WeekEntry>();
+  for (const row of weeklyActivityMinutes) {
+    if (row.week_start && row.total_moving_minutes) {
+      const entry = weekBreakdown.get(row.week_start) ?? { running: 0, cycling: 0, swimming: 0, other: 0 };
+      const sport = row.sport_type ?? '';
+      if (runningSports.has(sport)) {
+        entry.running += row.total_moving_minutes;
+      } else if (cyclingSports.has(sport)) {
+        entry.cycling += row.total_moving_minutes;
+      } else if (swimmingSports.has(sport)) {
+        entry.swimming += row.total_moving_minutes;
+      } else {
+        entry.other += row.total_moving_minutes;
+      }
+      weekBreakdown.set(row.week_start, entry);
+    }
+  }
+  const sortedWeeks = [...weekBreakdown.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const lastWeek = sortedWeeks.length > 0 ? sortedWeeks[sortedWeeks.length - 1][1] : null;
+  const thisWeekWorkoutMinutes = lastWeek
+    ? lastWeek.running + lastWeek.cycling + lastWeek.swimming + lastWeek.other
+    : null;
 
   // Charts
-  const weeklyMinutesChart = sortedWeeks.map(([week, minutes]) => ({ week, minutes }));
+  const weeklyMinutesChart = sortedWeeks.map(([week, { running, cycling, swimming, other }]) => ({
+    week,
+    running,
+    cycling,
+    swimming,
+    other,
+    minutes: running + cycling + swimming + other
+  }));
 
   const monthMap = new Map<string, number>();
   for (const row of monthlyDistanceBySport) {
@@ -118,9 +155,9 @@ export const load: PageServerLoad = async (event) => {
     latestSyncRun,
     stats: {
       currentYearRunningMiles,
+      currentYearCyclingMiles,
       thisWeekWorkoutMinutes,
-      syncedActivityCount: activityCount,
-      lastSyncedAt: connection.lastSyncedAt
+      syncedActivityCount: activityCount
     },
     charts: {
       weeklyMinutes: weeklyMinutesChart,

@@ -69,6 +69,8 @@
 		not_connected: 'Connect Strava before running a manual sync.'
 	};
 
+	const ESTIMATED_ACTIVITY_BUFFER_MULTIPLIER = 1.2;
+
 	type ManualSyncResponse = {
 		ok?: boolean;
 		error?: string;
@@ -99,6 +101,10 @@
 		const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
 
 		return { date: `${month} ${day}${suffix}, ${year}`, time };
+	}
+
+	function inflateEstimatedActivityTotal(total: number): number {
+		return Math.max(1, Math.ceil(total * ESTIMATED_ACTIVITY_BUFFER_MULTIPLIER));
 	}
 
 	async function onSyncSubmit(event: SubmitEvent) {
@@ -142,7 +148,10 @@
 
 				syncProgressFetched = body.totalActivitiesFetched ?? syncProgressFetched;
 				if (body.estimatedTotalActivities != null) {
-					estimatedTotalActivities = body.estimatedTotalActivities;
+					estimatedTotalActivities = Math.max(
+						estimatedTotalActivities ?? 0,
+						inflateEstimatedActivityTotal(body.estimatedTotalActivities)
+					);
 				}
 				syncProgressTotal =
 					estimatedTotalActivities != null
@@ -350,11 +359,6 @@
 							{isSyncing ? 'Syncing now…' : 'Sync now'}
 						</button>
 					</form>
-					<form method="POST" action={resolve('/strava/connect')}>
-						<button type="submit" class="destructive-button" disabled={isSyncing}>
-							Reconnect Strava
-						</button>
-					</form>
 				</div>
 				{#if isSyncing}
 					<div class="sync-progress" role="status" aria-live="polite">
@@ -372,7 +376,9 @@
 					Connect Strava first. Manual sync is available once the account is connected.
 				</p>
 				<form method="POST" action={resolve('/strava/connect')}>
-					<button type="submit" class="primary-button">Connect Strava</button>
+					<button type="submit" class="strava-connect-button">
+						<img src="/strava/connect-with-strava.png" alt="Connect with Strava" height="48" />
+					</button>
 				</form>
 			</div>
 		{/if}
@@ -494,6 +500,18 @@
 	.strava-disconnected {
 		display: grid;
 		gap: 0.6rem;
+	}
+
+	.strava-connect-button {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		display: block;
+	}
+
+	.strava-connect-button:hover {
+		opacity: 0.85;
 	}
 
 	.strava-disconnected .metric-caption {

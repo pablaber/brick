@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import PoweredByStrava from '$lib/components/PoweredByStrava.svelte';
 	import {
 		formatDate,
 		formatMetersAsMiles,
@@ -15,9 +16,9 @@
 
 	let { data } = $props();
 
-	function barHeight(value: number, max: number): number {
+	function barHeight(value: number, max: number, totalHeight = 72): number {
 		if (max <= 0) return 2;
-		return Math.max(4, Math.round((value / max) * 72));
+		return Math.max(2, Math.round((value / max) * totalHeight));
 	}
 
 	const weeklyMax = $derived(Math.max(...data.charts.weeklyMinutes.map((d) => d.minutes), 1));
@@ -67,6 +68,12 @@
 			</article>
 
 			<article class="card">
+				<h2>Cycling Miles This Year</h2>
+				<p class="metric">{formatMiles(data.stats.currentYearCyclingMiles)}</p>
+				<p class="metric-caption">Cumulative cycling miles in {new Date().getFullYear()}</p>
+			</article>
+
+			<article class="card">
 				<h2>Workout Minutes This Week</h2>
 				<p class="metric">{formatMinutes(data.stats.thisWeekWorkoutMinutes)}</p>
 				<p class="metric-caption">Total training minutes this week</p>
@@ -77,32 +84,52 @@
 				<p class="metric">{data.stats.syncedActivityCount ?? '—'}</p>
 				<p class="metric-caption">Total activities imported from Strava</p>
 			</article>
-
-			<article class="card">
-				<h2>Last Synced</h2>
-				<p class="metric metric-sm">{data.stats.lastSyncedAt ? formatDate(data.stats.lastSyncedAt) : '—'}</p>
-				<p class="metric-caption">
-					{#if data.latestSyncRun.status === 'success'}
-						{data.latestSyncRun.activitiesFetched ?? 0} activities checked ({data.latestSyncRun.syncType})
-					{:else}
-						Status: {data.latestSyncRun.status} ({data.latestSyncRun.syncType})
-					{/if}
-				</p>
-			</article>
 		</div>
 
 		<!-- Weekly minutes chart -->
 		{#if data.charts.weeklyMinutes.length > 0}
 			<article class="card">
 				<h2>Weekly Workout Minutes</h2>
+				<div class="chart-legend">
+					<span class="legend-item"><span class="legend-swatch legend-running"></span>Running</span>
+					<span class="legend-item"><span class="legend-swatch legend-cycling"></span>Cycling</span>
+					<span class="legend-item"><span class="legend-swatch legend-swimming"></span>Swimming</span>
+					<span class="legend-item"><span class="legend-swatch legend-other"></span>Other</span>
+				</div>
 				<div class="chart-wrapper">
 					<div class="chart-bars">
 						{#each data.charts.weeklyMinutes as item, i (item.week)}
-							<div
-								class="chart-col"
-								data-tip="{formatMinutes(item.minutes)} · wk of {formatWeek(item.week)}"
-							>
-								<div class="chart-bar" style="height: {barHeight(item.minutes, weeklyMax)}px"></div>
+							<div class="chart-col has-tooltip">
+								<div class="chart-tooltip">
+									<div class="tooltip-header">Wk of {formatWeek(item.week)}</div>
+									<div class="tooltip-total">{formatMinutes(item.minutes)} total</div>
+									{#if item.running > 0}
+										<div class="tooltip-row"><span class="tooltip-dot dot-running"></span>Running {formatMinutes(item.running)}</div>
+									{/if}
+									{#if item.cycling > 0}
+										<div class="tooltip-row"><span class="tooltip-dot dot-cycling"></span>Cycling {formatMinutes(item.cycling)}</div>
+									{/if}
+									{#if item.swimming > 0}
+										<div class="tooltip-row"><span class="tooltip-dot dot-swimming"></span>Swimming {formatMinutes(item.swimming)}</div>
+									{/if}
+									{#if item.other > 0}
+										<div class="tooltip-row"><span class="tooltip-dot dot-other"></span>Other {formatMinutes(item.other)}</div>
+									{/if}
+								</div>
+								<div class="chart-stack">
+									{#if item.other > 0}
+										<div class="chart-bar bar-other" style="height: {barHeight(item.other, weeklyMax)}px"></div>
+									{/if}
+									{#if item.swimming > 0}
+										<div class="chart-bar bar-swimming" style="height: {barHeight(item.swimming, weeklyMax)}px"></div>
+									{/if}
+									{#if item.cycling > 0}
+										<div class="chart-bar bar-cycling" style="height: {barHeight(item.cycling, weeklyMax)}px"></div>
+									{/if}
+									{#if item.running > 0}
+										<div class="chart-bar bar-running" style="height: {barHeight(item.running, weeklyMax)}px"></div>
+									{/if}
+								</div>
 								<span class="chart-label"
 									>{i % 4 === 0 ? formatYear(item.week) + ' ' + formatMonthShort(item.week) : ''}</span
 								>
@@ -111,7 +138,7 @@
 					</div>
 				</div>
 				<p class="metric-caption">
-					Past {data.charts.weeklyMinutes.length} weeks · most recent on right
+					Past {data.charts.weeklyMinutes.length} weeks
 				</p>
 			</article>
 		{/if}
@@ -223,6 +250,9 @@
 				</ul>
 			</article>
 		</div>
+		<div class="powered-by-footer">
+			<PoweredByStrava />
+		</div>
 	{/if}
 </section>
 
@@ -237,10 +267,6 @@
 		margin: 0;
 		font-size: 1rem;
 		font-weight: 500;
-	}
-
-	.metric-sm {
-		font-size: 1.25rem;
 	}
 
 	/* Bar chart */
@@ -267,8 +293,74 @@
 		justify-content: flex-end;
 	}
 
-	/* Tooltip */
-	.chart-col::before {
+	/* Rich tooltip */
+	.chart-tooltip {
+		display: none;
+		position: absolute;
+		bottom: calc(100% - 16px + 6px);
+		left: 50%;
+		transform: translateX(-50%);
+		background: #1a2740;
+		color: #fff;
+		font-size: 0.72rem;
+		font-weight: 500;
+		padding: 6px 8px;
+		border-radius: 5px;
+		white-space: nowrap;
+		pointer-events: none;
+		z-index: 20;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.has-tooltip:hover .chart-tooltip {
+		display: flex;
+	}
+
+	.tooltip-header {
+		color: #94a3b8;
+		font-size: 0.65rem;
+		font-weight: 400;
+	}
+
+	.tooltip-total {
+		font-weight: 600;
+		margin-bottom: 1px;
+	}
+
+	.tooltip-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-weight: 400;
+		font-size: 0.68rem;
+	}
+
+	.tooltip-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 2px;
+		flex-shrink: 0;
+	}
+
+	.dot-running {
+		background: var(--brand);
+	}
+
+	.dot-cycling {
+		background: #e8a838;
+	}
+
+	.dot-swimming {
+		background: #38bdf8;
+	}
+
+	.dot-other {
+		background: #8b5cf6;
+	}
+
+	/* Simple text tooltip (monthly/yearly charts) */
+	.chart-col[data-tip]::before {
 		content: attr(data-tip);
 		position: absolute;
 		bottom: calc(100% - 16px + 6px);
@@ -287,20 +379,94 @@
 		z-index: 20;
 	}
 
-	.chart-col:hover::before {
+	.chart-col[data-tip]:hover::before {
 		opacity: 1;
+	}
+
+	.chart-stack {
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.chart-stack .chart-bar:last-child {
+		border-radius: 0 0 0 0;
+	}
+
+	.chart-stack .chart-bar:first-child {
+		border-radius: 3px 3px 0 0;
+	}
+
+	.chart-stack .chart-bar:only-child {
+		border-radius: 3px 3px 0 0;
 	}
 
 	.chart-bar {
 		width: 100%;
 		background: var(--brand);
-		border-radius: 3px 3px 0 0;
+		border-radius: 0;
 		opacity: 0.8;
 		transition: opacity 100ms ease;
 	}
 
+	.bar-running {
+		background: var(--brand);
+	}
+
+	.bar-cycling {
+		background: #e8a838;
+	}
+
+	.bar-swimming {
+		background: #38bdf8;
+	}
+
+	.bar-other {
+		background: #8b5cf6;
+	}
+
 	.chart-col:hover .chart-bar {
 		opacity: 1;
+	}
+
+	.chart-legend {
+		display: flex;
+		gap: 1rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.legend-item {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.legend-swatch {
+		display: inline-block;
+		width: 10px;
+		height: 10px;
+		border-radius: 2px;
+		opacity: 0.8;
+	}
+
+	.legend-running {
+		background: var(--brand);
+	}
+
+	.legend-cycling {
+		background: #e8a838;
+	}
+
+	.legend-swimming {
+		background: #38bdf8;
+	}
+
+	.legend-other {
+		background: #8b5cf6;
 	}
 
 	.chart-label {
@@ -376,5 +542,11 @@
 	.activity-meta {
 		font-size: 0.82rem;
 		color: var(--text-muted);
+	}
+
+	.powered-by-footer {
+		display: flex;
+		justify-content: center;
+		padding: 0.5rem 0 0.25rem;
 	}
 </style>
