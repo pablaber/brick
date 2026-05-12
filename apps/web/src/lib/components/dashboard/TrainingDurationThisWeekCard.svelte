@@ -1,7 +1,19 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import { DASHBOARD_COMPACT_CHART_HEIGHT_PX } from '$lib/components/dashboard/constants';
 	import { formatMinutes, formatWeek } from '$lib/dashboard/formatters';
+
+	function slideX(
+		node: Element,
+		{ direction = 1, duration = 280 }: { direction: number; duration?: number }
+	) {
+		const width = (node as HTMLElement).offsetWidth;
+		return {
+			duration,
+			easing: cubicOut,
+			css: (t: number) => `transform: translateX(${(1 - t) * direction * width}px)`
+		};
+	}
 
 	type DashboardActivity = {
 		id: string;
@@ -114,6 +126,17 @@
 	});
 	let selectedWeekKey = $state(currentWeekKey);
 	let weekSlideDirection = $state(1);
+	let isSliding = $state(false);
+	let slideTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function startSlide(): void {
+		isSliding = true;
+		if (slideTimeout !== null) clearTimeout(slideTimeout);
+		slideTimeout = setTimeout(() => {
+			isSliding = false;
+			slideTimeout = null;
+		}, 310);
+	}
 
 	$effect(() => {
 		if (availableWeekKeys.length === 0) {
@@ -156,12 +179,14 @@
 	function showPreviousWeek(): void {
 		if (!canGoToPreviousWeek) return;
 		weekSlideDirection = -1;
+		startSlide();
 		selectedWeekKey = availableWeekKeys[selectedWeekIndex - 1];
 	}
 
 	function showNextWeek(): void {
 		if (!canGoToNextWeek) return;
 		weekSlideDirection = 1;
+		startSlide();
 		selectedWeekKey = availableWeekKeys[selectedWeekIndex + 1];
 	}
 </script>
@@ -206,13 +231,14 @@
 	{/if}
 	<div
 		class="activity-week-viewport"
+		class:is-sliding={isSliding}
 		style={`--dashboard-compact-chart-height: ${DASHBOARD_COMPACT_CHART_HEIGHT_PX}px`}
 	>
 		{#key selectedWeekKey}
 			<div
 				class="activity-week-panel"
-				in:fly={{ x: weekSlideDirection * 40, duration: 180, opacity: 1 }}
-				out:fly={{ x: weekSlideDirection * -40, duration: 180, opacity: 1 }}
+				in:slideX={{ direction: weekSlideDirection, duration: 280 }}
+				out:slideX={{ direction: -weekSlideDirection, duration: 280 }}
 			>
 				<div class="activity-columns-chart">
 					<div class="activity-day-groups">
@@ -338,6 +364,10 @@
 		position: relative;
 		overflow: visible;
 		height: calc(var(--dashboard-compact-chart-height) + 18px);
+	}
+
+	.activity-week-viewport.is-sliding {
+		overflow: hidden;
 	}
 
 	.activity-week-panel {
