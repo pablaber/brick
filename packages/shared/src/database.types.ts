@@ -284,46 +284,42 @@ export type Database = {
       };
     };
     Views: {
-      monthly_distance_by_sport: {
+      monthly_activity_breakdown: {
         Row: {
           activity_count: number | null;
-          month_start: string | null;
           sport_type: string | null;
           total_distance_meters: number | null;
           total_distance_miles: number | null;
-          user_id: string | null;
-        };
-        Relationships: [];
-      };
-      weekly_activity_minutes: {
-        Row: {
-          activity_count: number | null;
-          sport_type: string | null;
-          total_moving_minutes: number | null;
-          user_id: string | null;
-          week_start: string | null;
-        };
-        Relationships: [];
-      };
-      weekly_sport_breakdown: {
-        Row: {
-          activity_count: number | null;
-          sport_type: string | null;
-          total_distance_meters: number | null;
           total_moving_minutes: number | null;
           total_moving_seconds: number | null;
           user_id: string | null;
-          week_start: string | null;
+          period_start: string | null;
         };
         Relationships: [];
       };
-      yearly_running_distance: {
+      weekly_activity_breakdown: {
         Row: {
           activity_count: number | null;
+          period_start: string | null;
+          sport_type: string | null;
           total_distance_meters: number | null;
           total_distance_miles: number | null;
+          total_moving_minutes: number | null;
+          total_moving_seconds: number | null;
           user_id: string | null;
-          year_start: string | null;
+        };
+        Relationships: [];
+      };
+      yearly_activity_breakdown: {
+        Row: {
+          activity_count: number | null;
+          period_start: string | null;
+          sport_type: string | null;
+          total_distance_meters: number | null;
+          total_distance_miles: number | null;
+          total_moving_minutes: number | null;
+          total_moving_seconds: number | null;
+          user_id: string | null;
         };
         Relationships: [];
       };

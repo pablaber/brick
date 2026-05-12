@@ -198,7 +198,7 @@ Then open:
 Local development setup and schema docs are in `supabase/README.md`.
 
 Tables: `profiles`, `strava_connections`, `oauth_states`, `activities`, `sync_runs`.
-Views: `weekly_activity_minutes`, `monthly_distance_by_sport`, `yearly_running_distance`, `weekly_sport_breakdown`.
+Views: `weekly_activity_breakdown`, `monthly_activity_breakdown`, `yearly_activity_breakdown`.
 
 ## Current non-goals
 

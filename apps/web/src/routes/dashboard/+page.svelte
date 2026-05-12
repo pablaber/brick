@@ -26,14 +26,28 @@
 	const yearlyMax = $derived(Math.max(...data.charts.yearlyDistance.map((d) => d.miles), 1));
 
 	const SVG_H = 64;
-	const YEAR_WEEKS = 52;
 	const SVG_PAD = 2;
 
 	let runningSparkWidth = $state(0);
 	let cyclingSparkWidth = $state(0);
 
-	function weekToX(weekIdx: number, w: number): number {
-		return SVG_PAD + (weekIdx / YEAR_WEEKS) * (w - SVG_PAD * 2);
+	function yearBounds() {
+		const year = new Date().getUTCFullYear();
+		return {
+			start: Date.UTC(year, 0, 1),
+			end: Date.UTC(year + 1, 0, 1)
+		};
+	}
+
+	function yearProgressForDate(dateStr: string): number {
+		const { start, end } = yearBounds();
+		const timestamp = new Date(`${dateStr}T00:00:00Z`).getTime();
+		if (Number.isNaN(timestamp)) return 0;
+		return Math.max(0, Math.min(1, (timestamp - start) / (end - start)));
+	}
+
+	function dateToX(dateStr: string, w: number): number {
+		return SVG_PAD + yearProgressForDate(dateStr) * (w - SVG_PAD * 2);
 	}
 
 	function milesToY(miles: number, maxMiles: number): number {
@@ -47,19 +61,20 @@
 		return Math.max(pointMax, goalTarget);
 	}
 
-	function sparkCoords(points: { miles: number }[], w: number, maxMiles: number) {
+	function sparkCoords(points: { date: string; miles: number }[], w: number, maxMiles: number) {
 		if (points.length === 0 || w <= 0) return [];
-		return points.map((p, i) => ({
-			x: weekToX(i, w),
+		return points.map((p) => ({
+			x: dateToX(p.date, w),
 			y: milesToY(p.miles, maxMiles)
 		}));
 	}
 
 	function sparkGoalPath(goalTarget: number | null, w: number, maxMiles: number): string {
 		if (goalTarget == null || goalTarget <= 0 || w <= 0) return '';
-		const x1 = weekToX(0, w);
+		const year = new Date().getUTCFullYear();
+		const x1 = dateToX(`${year}-01-01`, w);
 		const y1 = milesToY(0, maxMiles);
-		const x2 = weekToX(YEAR_WEEKS, w);
+		const x2 = dateToX(`${year + 1}-01-01`, w);
 		const y2 = milesToY(goalTarget, maxMiles);
 		return `M${x1},${y1} L${x2},${y2}`;
 	}
@@ -89,36 +104,17 @@
 		sparkGoalPath(runningGoalTarget, runningSparkWidth, runningSparkMax)
 	);
 
-	function goalMilesAtWeek(goalTarget: number | null, weekIdx: number | null): number | null {
-		if (goalTarget == null || goalTarget <= 0 || weekIdx == null) return null;
-		const clampedIdx = Math.max(0, Math.min(weekIdx, YEAR_WEEKS));
-		return (goalTarget * clampedIdx) / YEAR_WEEKS;
-	}
-
-	function progressMilesAtWeek(points: { miles: number }[], weekIdx: number | null): number | null {
-		if (weekIdx == null || weekIdx < 0 || weekIdx >= points.length) return null;
-		return points[weekIdx]?.miles ?? null;
-	}
-
-	function weekIndexToDateString(weekIdx: number): string {
-		const year = new Date().getUTCFullYear();
-		const yearStart = new Date(Date.UTC(year, 0, 1));
-		const dow = yearStart.getUTCDay();
-		const firstMonday = new Date(yearStart);
-		firstMonday.setUTCDate(firstMonday.getUTCDate() - ((dow + 6) % 7));
-		firstMonday.setUTCDate(firstMonday.getUTCDate() + weekIdx * 7);
-		return firstMonday.toISOString().split('T')[0];
+	function goalMilesAtDate(goalTarget: number | null, dateStr: string | null): number | null {
+		if (goalTarget == null || goalTarget <= 0 || !dateStr) return null;
+		return goalTarget * yearProgressForDate(dateStr);
 	}
 
 	function monthTicksForWidth(width: number) {
 		if (width <= 0) return [];
 		const year = new Date().getFullYear();
-		const yearStart = new Date(year, 0, 1);
 		const months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		return months.map((label, i) => {
-			const monthStart = new Date(year, i + 1, 1);
-			const weekFloat = (monthStart.getTime() - yearStart.getTime()) / (7 * 24 * 60 * 60 * 1000);
-			const x = weekToX(weekFloat, width);
+			const x = dateToX(`${year}-${String(i + 2).padStart(2, '0')}-01`, width);
 			return { label, x, pct: (x / width) * 100 };
 		});
 	}
@@ -128,12 +124,28 @@
 	let runningHover = $state<number | null>(null);
 	let cyclingHover = $state<number | null>(null);
 
-	function handleSparkMove(e: MouseEvent, setIndex: (i: number | null) => void) {
+	function handleSparkMove(
+		e: MouseEvent,
+		coords: { x: number; y: number }[],
+		setIndex: (i: number | null) => void
+	) {
 		const el = e.currentTarget as HTMLElement;
 		const rect = el.getBoundingClientRect();
-		const xPct = (e.clientX - rect.left) / rect.width;
-		const idx = Math.round(xPct * YEAR_WEEKS);
-		setIndex(idx >= 0 && idx <= YEAR_WEEKS ? idx : null);
+		const x = e.clientX - rect.left;
+		if (coords.length === 0) {
+			setIndex(null);
+			return;
+		}
+		let nearestIdx = 0;
+		let nearestDistance = Math.abs(coords[0].x - x);
+		for (let i = 1; i < coords.length; i += 1) {
+			const distance = Math.abs(coords[i].x - x);
+			if (distance < nearestDistance) {
+				nearestIdx = i;
+				nearestDistance = distance;
+			}
+		}
+		setIndex(nearestIdx);
 	}
 </script>
 
@@ -194,7 +206,7 @@
 								class="sparkline-graph"
 								role="img"
 								bind:clientWidth={runningSparkWidth}
-								onmousemove={(e) => handleSparkMove(e, (i) => runningHover = i)}
+								onmousemove={(e) => handleSparkMove(e, runningCoords, (i) => runningHover = i)}
 								onmouseleave={() => runningHover = null}
 							>
 								{#if runningSparkWidth > 0}
@@ -208,34 +220,31 @@
 										<path d={runningSpark.area} class="sparkline-area sparkline-running" />
 										<path d={runningSpark.line} class="sparkline-line sparkline-running-line" />
 										{#if runningHover !== null}
-											{@const hoverX = weekToX(runningHover, runningSparkWidth)}
-											{@const currentMiles = progressMilesAtWeek(data.charts.runningProgress, runningHover)}
 											{@const currentPoint = runningHover < runningCoords.length ? runningCoords[runningHover] : null}
-											<line x1={hoverX} y1="0" x2={hoverX} y2={SVG_H} class="sparkline-cursor" />
 											{#if currentPoint}
+												<line x1={currentPoint.x} y1="0" x2={currentPoint.x} y2={SVG_H} class="sparkline-cursor" />
 												<circle cx={currentPoint.x} cy={currentPoint.y} r="4" class="sparkline-dot dot-running-stroke" />
 											{/if}
 										{/if}
 									</svg>
 								{/if}
 								{#if runningHover !== null && runningSparkWidth > 0}
-									{@const hoverX = weekToX(runningHover, runningSparkWidth)}
-									{@const goalMiles = goalMilesAtWeek(runningGoalTarget, runningHover)}
-									{@const currentMiles = progressMilesAtWeek(data.charts.runningProgress, runningHover)}
-									{@const hoverWeek = weekIndexToDateString(runningHover)}
-									<div class="sparkline-tip" style="left: {(hoverX / runningSparkWidth) * 100}%">
+									{@const currentPoint = runningHover < runningCoords.length ? runningCoords[runningHover] : null}
+									{@const currentProgress = runningHover < data.charts.runningProgress.length ? data.charts.runningProgress[runningHover] : null}
+									{@const goalMiles = goalMilesAtDate(runningGoalTarget, currentProgress?.date ?? null)}
+									{#if currentPoint && currentProgress}
+									<div class="sparkline-tip" style="left: {(currentPoint.x / runningSparkWidth) * 100}%">
 										{#if goalMiles !== null}
 											<div class="sparkline-tip-row">
 												<strong>Goal {formatMiles(goalMiles)}</strong>
 											</div>
 										{/if}
-										{#if currentMiles !== null}
-											<div class="sparkline-tip-row">
-												<span>Current {formatMiles(currentMiles)}</span>
-											</div>
-										{/if}
-										<span>{formatWeek(hoverWeek)}</span>
+										<div class="sparkline-tip-row">
+											<span>Current {formatMiles(currentProgress.miles)}</span>
+										</div>
+										<span>{formatWeek(currentProgress.date)}</span>
 									</div>
+									{/if}
 								{/if}
 							</div>
 							<div class="sparkline-month-labels">
@@ -259,7 +268,7 @@
 								class="sparkline-graph"
 								role="img"
 								bind:clientWidth={cyclingSparkWidth}
-								onmousemove={(e) => handleSparkMove(e, (i) => cyclingHover = i)}
+								onmousemove={(e) => handleSparkMove(e, cyclingCoords, (i) => cyclingHover = i)}
 								onmouseleave={() => cyclingHover = null}
 							>
 								{#if cyclingSparkWidth > 0}
@@ -270,27 +279,25 @@
 										<path d={cyclingSpark.area} class="sparkline-area sparkline-cycling" />
 										<path d={cyclingSpark.line} class="sparkline-line sparkline-cycling-line" />
 										{#if cyclingHover !== null}
-											{@const hoverX = weekToX(cyclingHover, cyclingSparkWidth)}
 											{@const currentPoint = cyclingHover < cyclingCoords.length ? cyclingCoords[cyclingHover] : null}
-											<line x1={hoverX} y1="0" x2={hoverX} y2={SVG_H} class="sparkline-cursor" />
 											{#if currentPoint}
+												<line x1={currentPoint.x} y1="0" x2={currentPoint.x} y2={SVG_H} class="sparkline-cursor" />
 												<circle cx={currentPoint.x} cy={currentPoint.y} r="4" class="sparkline-dot dot-cycling-stroke" />
 											{/if}
 										{/if}
 									</svg>
 								{/if}
 								{#if cyclingHover !== null && cyclingSparkWidth > 0}
-									{@const hoverX = weekToX(cyclingHover, cyclingSparkWidth)}
-									{@const currentMiles = progressMilesAtWeek(data.charts.cyclingProgress, cyclingHover)}
-									{@const hoverWeek = weekIndexToDateString(cyclingHover)}
-									<div class="sparkline-tip" style="left: {(hoverX / cyclingSparkWidth) * 100}%">
-										{#if currentMiles !== null}
-											<div class="sparkline-tip-row">
-												<strong>Current {formatMiles(currentMiles)}</strong>
-											</div>
-										{/if}
-										<span>{formatWeek(hoverWeek)}</span>
+									{@const currentPoint = cyclingHover < cyclingCoords.length ? cyclingCoords[cyclingHover] : null}
+									{@const currentProgress = cyclingHover < data.charts.cyclingProgress.length ? data.charts.cyclingProgress[cyclingHover] : null}
+									{#if currentPoint && currentProgress}
+									<div class="sparkline-tip" style="left: {(currentPoint.x / cyclingSparkWidth) * 100}%">
+										<div class="sparkline-tip-row">
+											<strong>Current {formatMiles(currentProgress.miles)}</strong>
+										</div>
+										<span>{formatWeek(currentProgress.date)}</span>
 									</div>
+									{/if}
 								{/if}
 							</div>
 							<div class="sparkline-month-labels">
@@ -381,7 +388,7 @@
 		<!-- Monthly distance chart -->
 		{#if data.charts.monthlyDistance.length > 0}
 			<article class="card">
-				<h2>Monthly Running Distance</h2>
+				<h2>Monthly Distance</h2>
 				<div class="chart-wrapper">
 					<div class="chart-bars">
 						{#each data.charts.monthlyDistance as item, i (item.month)}
@@ -401,10 +408,10 @@
 			</article>
 		{/if}
 
-		<!-- Yearly running distance chart -->
+		<!-- Yearly distance chart -->
 		{#if data.charts.yearlyDistance.length > 0}
 			<article class="card">
-				<h2>Yearly Running Distance</h2>
+				<h2>Yearly Distance</h2>
 				<div class="chart-wrapper chart-wrapper-sm">
 					<div class="chart-bars">
 						{#each data.charts.yearlyDistance as item (item.year)}
@@ -418,7 +425,7 @@
 						{/each}
 					</div>
 				</div>
-				<p class="metric-caption">Total running miles per year</p>
+				<p class="metric-caption">Total miles per year</p>
 			</article>
 		{/if}
 

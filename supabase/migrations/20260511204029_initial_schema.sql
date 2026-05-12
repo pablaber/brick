@@ -69,10 +69,29 @@ CREATE TABLE IF NOT EXISTS "public"."activities" (
 ALTER TABLE "public"."activities" OWNER TO "postgres";
 
 
-CREATE OR REPLACE VIEW "public"."monthly_distance_by_sport" WITH ("security_invoker"='true') AS
+CREATE OR REPLACE VIEW "public"."weekly_activity_breakdown" WITH ("security_invoker"='true') AS
  SELECT "user_id",
-    ("date_trunc"('month'::"text", "start_date"))::"date" AS "month_start",
+    ("date_trunc"('week'::"text", "start_date"))::"date" AS "period_start",
     "sport_type",
+    "sum"("moving_time_seconds") AS "total_moving_seconds",
+    (("sum"("moving_time_seconds"))::numeric / 60.0) AS "total_moving_minutes",
+    "sum"("distance_meters") AS "total_distance_meters",
+    "sum"(("distance_meters" / 1609.344)) AS "total_distance_miles",
+    "count"(*) AS "activity_count"
+   FROM "public"."activities"
+  WHERE ("start_date" IS NOT NULL)
+  GROUP BY "user_id", ("date_trunc"('week'::"text", "start_date")), "sport_type";
+
+
+ALTER VIEW "public"."weekly_activity_breakdown" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."monthly_activity_breakdown" WITH ("security_invoker"='true') AS
+ SELECT "user_id",
+    ("date_trunc"('month'::"text", "start_date"))::"date" AS "period_start",
+    "sport_type",
+    "sum"("moving_time_seconds") AS "total_moving_seconds",
+    (("sum"("moving_time_seconds"))::numeric / 60.0) AS "total_moving_minutes",
     "sum"("distance_meters") AS "total_distance_meters",
     "sum"(("distance_meters" / 1609.344)) AS "total_distance_miles",
     "count"(*) AS "activity_count"
@@ -81,7 +100,24 @@ CREATE OR REPLACE VIEW "public"."monthly_distance_by_sport" WITH ("security_invo
   GROUP BY "user_id", ("date_trunc"('month'::"text", "start_date")), "sport_type";
 
 
-ALTER VIEW "public"."monthly_distance_by_sport" OWNER TO "postgres";
+ALTER VIEW "public"."monthly_activity_breakdown" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."yearly_activity_breakdown" WITH ("security_invoker"='true') AS
+ SELECT "user_id",
+    ("date_trunc"('year'::"text", "start_date"))::"date" AS "period_start",
+    "sport_type",
+    "sum"("moving_time_seconds") AS "total_moving_seconds",
+    (("sum"("moving_time_seconds"))::numeric / 60.0) AS "total_moving_minutes",
+    "sum"("distance_meters") AS "total_distance_meters",
+    "sum"(("distance_meters" / 1609.344)) AS "total_distance_miles",
+    "count"(*) AS "activity_count"
+   FROM "public"."activities"
+  WHERE ("start_date" IS NOT NULL)
+  GROUP BY "user_id", ("date_trunc"('year'::"text", "start_date")), "sport_type";
+
+
+ALTER VIEW "public"."yearly_activity_breakdown" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."oauth_states" (
@@ -141,50 +177,6 @@ CREATE TABLE IF NOT EXISTS "public"."sync_runs" (
 
 
 ALTER TABLE "public"."sync_runs" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."weekly_activity_minutes" WITH ("security_invoker"='true') AS
- SELECT "user_id",
-    ("date_trunc"('week'::"text", "start_date"))::"date" AS "week_start",
-    "sport_type",
-    (("sum"("moving_time_seconds"))::numeric / 60.0) AS "total_moving_minutes",
-    "count"(*) AS "activity_count"
-   FROM "public"."activities"
-  WHERE ("start_date" IS NOT NULL)
-  GROUP BY "user_id", ("date_trunc"('week'::"text", "start_date")), "sport_type";
-
-
-ALTER VIEW "public"."weekly_activity_minutes" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."weekly_sport_breakdown" WITH ("security_invoker"='true') AS
- SELECT "user_id",
-    ("date_trunc"('week'::"text", "start_date"))::"date" AS "week_start",
-    "sport_type",
-    "sum"("moving_time_seconds") AS "total_moving_seconds",
-    (("sum"("moving_time_seconds"))::numeric / 60.0) AS "total_moving_minutes",
-    "sum"("distance_meters") AS "total_distance_meters",
-    "count"(*) AS "activity_count"
-   FROM "public"."activities"
-  WHERE ("start_date" IS NOT NULL)
-  GROUP BY "user_id", ("date_trunc"('week'::"text", "start_date")), "sport_type";
-
-
-ALTER VIEW "public"."weekly_sport_breakdown" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."yearly_running_distance" WITH ("security_invoker"='true') AS
- SELECT "user_id",
-    ("date_trunc"('year'::"text", "start_date"))::"date" AS "year_start",
-    "sum"("distance_meters") AS "total_distance_meters",
-    "sum"(("distance_meters" / 1609.344)) AS "total_distance_miles",
-    "count"(*) AS "activity_count"
-   FROM "public"."activities"
-  WHERE (("start_date" IS NOT NULL) AND ("sport_type" = ANY (ARRAY['Run'::"text", 'TrailRun'::"text", 'VirtualRun'::"text"])))
-  GROUP BY "user_id", ("date_trunc"('year'::"text", "start_date"));
-
-
-ALTER VIEW "public"."yearly_running_distance" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."activities"
@@ -353,8 +345,13 @@ GRANT SELECT ON TABLE "public"."activities" TO "authenticated";
 
 
 
-GRANT ALL ON TABLE "public"."monthly_distance_by_sport" TO "service_role";
-GRANT SELECT ON TABLE "public"."monthly_distance_by_sport" TO "authenticated";
+GRANT ALL ON TABLE "public"."weekly_activity_breakdown" TO "service_role";
+GRANT SELECT ON TABLE "public"."weekly_activity_breakdown" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."monthly_activity_breakdown" TO "service_role";
+GRANT SELECT ON TABLE "public"."monthly_activity_breakdown" TO "authenticated";
 
 
 
@@ -400,18 +397,8 @@ GRANT SELECT ON TABLE "public"."sync_runs" TO "authenticated";
 
 
 
-GRANT ALL ON TABLE "public"."weekly_activity_minutes" TO "service_role";
-GRANT SELECT ON TABLE "public"."weekly_activity_minutes" TO "authenticated";
-
-
-
-GRANT ALL ON TABLE "public"."weekly_sport_breakdown" TO "service_role";
-GRANT SELECT ON TABLE "public"."weekly_sport_breakdown" TO "authenticated";
-
-
-
-GRANT ALL ON TABLE "public"."yearly_running_distance" TO "service_role";
-GRANT SELECT ON TABLE "public"."yearly_running_distance" TO "authenticated";
+GRANT ALL ON TABLE "public"."yearly_activity_breakdown" TO "service_role";
+GRANT SELECT ON TABLE "public"."yearly_activity_breakdown" TO "authenticated";
 
 
 
@@ -433,8 +420,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
-
 
 
 
