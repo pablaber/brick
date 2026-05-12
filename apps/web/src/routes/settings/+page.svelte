@@ -25,12 +25,18 @@
 	let stravaOpen = $state(untrack(() => !data.strava.connected));
 
 	let colorValues = $state(untrack(() => ({ ...data.settings.colors })));
+	let colorSaving = $state(false);
 	let colorSaved = $state(false);
 	const colorIndicator = $derived.by(() => {
-		const hasUnsaved = data.settings.categories.some((c) => colorValues[c] !== data.settings.colors[c]);
+		const hasUnsaved = data.settings.categories.some((c) =>
+			colorValues[c]?.toUpperCase() !== data.settings.colors[c]?.toUpperCase()
+		);
 		if (hasUnsaved) return 'unsaved' as const;
 		return colorSaved ? 'saved' as const : 'idle' as const;
 	});
+
+	let goalSaving = $state<Record<string, 'save' | 'deactivate' | false>>({});
+	let goalSaved = $state<Record<string, boolean>>({});
 
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastDismissing = $state(false);
@@ -251,8 +257,10 @@
 				<p class="form-error">{settingsForm.error}</p>
 			{/if}
 			<form method="POST" action="?/saveSportColors" class="form-stack compact-form" use:enhance={() => {
+				colorSaving = true;
 				return async ({ result, update }) => {
 					await update({ reset: false });
+					colorSaving = false;
 					if (result.type === 'success') colorSaved = true;
 				};
 			}}>
@@ -267,13 +275,16 @@
 								bind:value={colorValues[category]}
 								required
 							/>
-							<code>{colorValues[category]}</code>
+							<code>{colorValues[category].toUpperCase()}</code>
 						</label>
 					{/each}
 				</div>
 				<div class="color-actions">
-					<button type="submit" class="primary-button">Save Colors</button>
-					<button type="button" class="secondary-button" onclick={() => {
+					<button type="submit" class="primary-button save-button" disabled={colorSaving}>
+						<span class="save-button-text" class:save-button-text-hidden={colorSaving}>Save Colors</span>
+						<span class="save-button-text save-button-text-overlay" class:save-button-text-hidden={!colorSaving}>Saving…</span>
+					</button>
+					<button type="button" class="secondary-button" disabled={colorSaving} onclick={() => {
 						colorValues = { ...data.settings.defaultColors };
 					}}>Reset to Defaults</button>
 					<span class="save-indicator" class:save-indicator-visible={colorIndicator !== 'idle'}>
@@ -304,9 +315,6 @@
 			{#if settingsForm?.scope === 'goals' && settingsForm.error}
 				<p class="form-error">{settingsForm.error}</p>
 			{/if}
-			{#if settingsForm?.scope === 'goals' && settingsForm.success}
-				<p class="note note-success">{settingsForm.success}</p>
-			{/if}
 			{#each data.settings.goalDefinitions as definition (definition.goalType)}
 				{@const activeGoal = data.settings.activeGoals[definition.goalType]}
 				<div class="goal-row">
@@ -317,7 +325,15 @@
 					{#if activeGoal}
 						<p class="metric-caption">Current target: {activeGoal.targetValue} {definition.unit}</p>
 					{/if}
-					<form method="POST" action="?/saveGoal" class="goal-form" use:enhance={() => ({ update }) => update({ reset: false })}>
+					<form method="POST" action="?/saveGoal" class="goal-form" use:enhance={(e) => {
+						const isDeactivate = e.formData.get('mode') === 'deactivate';
+						goalSaving = { ...goalSaving, [definition.goalType]: isDeactivate ? 'deactivate' : 'save' };
+						return async ({ result, update }) => {
+							await update({ reset: false });
+							goalSaving = { ...goalSaving, [definition.goalType]: false };
+							if (result.type === 'success') goalSaved = { ...goalSaved, [definition.goalType]: true };
+						};
+					}}>
 						<input type="hidden" name="goalType" value={definition.goalType} />
 						<label>
 							<span>Target</span>
@@ -331,15 +347,23 @@
 								value={activeGoal?.targetValue ?? ''}
 								placeholder={`Enter ${definition.unit}`}
 								required
+								oninput={() => { goalSaved = { ...goalSaved, [definition.goalType]: false }; }}
 							/>
 						</label>
 						<div class="goal-actions">
-							<button type="submit" class="primary-button">Save Goal</button>
+							<button type="submit" class="primary-button save-button" disabled={!!goalSaving[definition.goalType]}>
+								<span class="save-button-text" class:save-button-text-hidden={goalSaving[definition.goalType] === 'save'}>Save Goal</span>
+								<span class="save-button-text save-button-text-overlay" class:save-button-text-hidden={goalSaving[definition.goalType] !== 'save'}>Saving…</span>
+							</button>
 							{#if activeGoal}
-								<button type="submit" class="destructive-button" name="mode" value="deactivate">
-									Remove Goal
+								<button type="submit" class="destructive-button save-button" name="mode" value="deactivate" disabled={!!goalSaving[definition.goalType]}>
+									<span class="save-button-text" class:save-button-text-hidden={goalSaving[definition.goalType] === 'deactivate'}>Remove Goal</span>
+									<span class="save-button-text save-button-text-overlay" class:save-button-text-hidden={goalSaving[definition.goalType] !== 'deactivate'}>Removing…</span>
 								</button>
 							{/if}
+							<span class="save-indicator" class:save-indicator-visible={goalSaved[definition.goalType]}>
+								<span class="save-indicator-saved">Changes saved</span>
+							</span>
 						</div>
 					</form>
 				</div>
@@ -650,6 +674,7 @@
 	.goal-actions {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: center;
 		gap: 0.5rem;
 	}
 
@@ -677,6 +702,24 @@
 
 	.save-indicator-saved {
 		color: var(--ok);
+	}
+
+	.save-button {
+		display: grid;
+		grid-template-areas: "text";
+	}
+
+	.save-button-text {
+		grid-area: text;
+		transition: opacity 150ms ease;
+	}
+
+	.save-button-text-hidden {
+		opacity: 0;
+	}
+
+	.save-button-text-overlay {
+		pointer-events: none;
 	}
 
 	.secondary-button {
