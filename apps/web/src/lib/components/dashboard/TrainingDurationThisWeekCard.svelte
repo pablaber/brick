@@ -53,11 +53,13 @@
 	function weekStartKey(dateLike: string): string | null {
 		const parsed = new Date(dateLike);
 		if (Number.isNaN(parsed.getTime())) return null;
-		const weekStart = new Date(parsed);
-		const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
-		weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
-		weekStart.setUTCHours(0, 0, 0, 0);
-		return weekStart.toISOString().slice(0, 10);
+		const daysSinceMonday = (parsed.getUTCDay() + 6) % 7;
+		const weekStartUtcMillis = Date.UTC(
+			parsed.getUTCFullYear(),
+			parsed.getUTCMonth(),
+			parsed.getUTCDate() - daysSinceMonday
+		);
+		return new Date(weekStartUtcMillis).toISOString().slice(0, 10);
 	}
 
 	function weekdayIndexMonday(dateLike: string): number | null {
@@ -67,13 +69,7 @@
 	}
 
 	const now = new Date();
-	const currentWeekKey = (() => {
-		const weekStart = new Date(now);
-		const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
-		weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
-		weekStart.setUTCHours(0, 0, 0, 0);
-		return weekStart.toISOString().slice(0, 10);
-	})();
+	const currentWeekKey = weekStartKey(now.toISOString()) ?? now.toISOString().slice(0, 10);
 	const weeklyActivities = $derived.by(() =>
 		recentActivities
 			.flatMap((activity) => {
@@ -105,13 +101,16 @@
 			)
 	);
 	const availableWeekKeys = $derived.by(() => {
-		const weekKeys = new Set(
-			weeklyActivities
-				.filter((activity) => activity.weekKey <= currentWeekKey)
-				.map((activity) => activity.weekKey)
+		const weekKeys = weeklyActivities
+			.filter((activity) => activity.weekKey <= currentWeekKey)
+			.map((activity) => activity.weekKey);
+		const uniqueWeekKeys = weekKeys.filter(
+			(weekKey, index) => weekKeys.indexOf(weekKey) === index
 		);
-		weekKeys.add(currentWeekKey);
-		return [...weekKeys].sort((a, b) => a.localeCompare(b));
+		if (!uniqueWeekKeys.includes(currentWeekKey)) {
+			uniqueWeekKeys.push(currentWeekKey);
+		}
+		return uniqueWeekKeys.sort((a, b) => a.localeCompare(b));
 	});
 	let selectedWeekKey = $state(currentWeekKey);
 	let weekSlideDirection = $state(1);

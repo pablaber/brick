@@ -42,6 +42,16 @@
 		return 'other';
 	}
 
+	function weekStartKey(date: Date): string {
+		const daysSinceMonday = (date.getUTCDay() + 6) % 7;
+		const weekStartUtcMillis = Date.UTC(
+			date.getUTCFullYear(),
+			date.getUTCMonth(),
+			date.getUTCDate() - daysSinceMonday
+		);
+		return new Date(weekStartUtcMillis).toISOString().slice(0, 10);
+	}
+
 	const weeklyMax = $derived(Math.max(...data.charts.weeklyMinutes.map((d) => d.minutes), 1));
 	const monthlyMax = $derived(Math.max(...data.charts.monthlyDistance.map((d) => d.miles), 1));
 	const yearlyMax = $derived(Math.max(...data.charts.yearlyDistance.map((d) => d.miles), 1));
@@ -54,13 +64,7 @@
 	);
 
 	const now = new Date();
-	const currentWeekKey = (() => {
-		const weekStart = new Date(now);
-		const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
-		weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
-		weekStart.setUTCHours(0, 0, 0, 0);
-		return weekStart.toISOString().slice(0, 10);
-	})();
+	const currentWeekKey = weekStartKey(now);
 	const currentMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
 	const currentYearKey = `${now.getUTCFullYear()}-01-01`;
 </script>
