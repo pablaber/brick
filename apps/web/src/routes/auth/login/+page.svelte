@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 
-	let { data, form } = $props();
+	let { form } = $props();
 	let loading = $state(false);
 	let mode = $state<'login' | 'signup'>(
 		page.url.searchParams.get('mode') === 'signup' ? 'signup' : 'login'
