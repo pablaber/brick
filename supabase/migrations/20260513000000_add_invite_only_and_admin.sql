@@ -9,7 +9,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NEW.is_admin IS DISTINCT FROM OLD.is_admin AND current_setting('role') != 'service_role' THEN
+  IF NEW.is_admin IS DISTINCT FROM OLD.is_admin AND current_user = 'authenticated' THEN
     RAISE EXCEPTION 'is_admin cannot be modified directly';
   END IF;
   RETURN NEW;
