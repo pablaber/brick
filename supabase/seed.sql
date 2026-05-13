@@ -21,6 +21,10 @@ BEGIN
       email,
       encrypted_password,
       email_confirmed_at,
+      confirmation_token,
+      email_change,
+      email_change_token_new,
+      recovery_token,
       raw_app_meta_data,
       raw_user_meta_data,
       created_at,
@@ -34,6 +38,10 @@ BEGIN
       seed_email,
       crypt(seed_password, gen_salt('bf')),
       now(),
+      '',
+      '',
+      '',
+      '',
       jsonb_build_object('provider', 'email', 'providers', ARRAY['email']),
       '{}'::jsonb,
       now(),
@@ -44,6 +52,10 @@ BEGIN
       email = EXCLUDED.email,
       encrypted_password = EXCLUDED.encrypted_password,
       email_confirmed_at = EXCLUDED.email_confirmed_at,
+      confirmation_token = '',
+      email_change = '',
+      email_change_token_new = '',
+      recovery_token = '',
       raw_app_meta_data = EXCLUDED.raw_app_meta_data,
       updated_at = now();
   ELSE
@@ -51,6 +63,10 @@ BEGIN
     SET
       encrypted_password = crypt(seed_password, gen_salt('bf')),
       email_confirmed_at = COALESCE(email_confirmed_at, now()),
+      confirmation_token = '',
+      email_change = '',
+      email_change_token_new = '',
+      recovery_token = '',
       raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb)
         || jsonb_build_object('provider', 'email', 'providers', ARRAY['email']),
       updated_at = now()
