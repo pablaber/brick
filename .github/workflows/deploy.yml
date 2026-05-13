@@ -117,6 +117,7 @@ jobs:
       - name: Sync web worker secrets
         run: |
           printf '%s' "$WORKER_SHARED_SECRET" | pnpm --filter web exec wrangler secret put WORKER_SHARED_SECRET --config wrangler.jsonc
+          printf '%s' "$SUPABASE_SECRET_KEY" | pnpm --filter web exec wrangler secret put SUPABASE_SECRET_KEY --config wrangler.jsonc
 
       - name: Deploy web app
         run: |

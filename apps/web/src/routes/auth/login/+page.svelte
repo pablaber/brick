@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 
 	let { form } = $props();
 	let loading = $state(false);
-	let mode = $state<'login' | 'signup'>('login');
+	let mode = $state<'login' | 'signup'>(
+		page.url.searchParams.get('mode') === 'signup' ? 'signup' : 'login'
+	);
 </script>
 
 <section class="page">
@@ -64,19 +67,12 @@
 				</button>
 			</form>
 
-			<p class="form-toggle">
-				{#if mode === 'login'}
-					Don't have an account?
-					<button class="link-button" type="button" onclick={() => (mode = 'signup')}
-						>Sign up</button
-					>
-				{:else}
+			{#if mode === 'signup'}
+				<p class="form-toggle">
 					Already have an account?
-					<button class="link-button" type="button" onclick={() => (mode = 'login')}
-						>Log in</button
-					>
-				{/if}
-			</p>
+					<button class="link-button" type="button" onclick={() => (mode = 'login')}>Log in</button>
+				</p>
+			{/if}
 		{/if}
 	</div>
 </section>

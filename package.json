@@ -1,6 +1,7 @@
 {
   "name": "brick",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@9.12.3",
   "scripts": {
     "dev": "turbo run dev --parallel",

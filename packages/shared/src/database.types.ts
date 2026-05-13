@@ -96,23 +96,55 @@ export type Database = {
         };
         Relationships: [];
       };
+      allowed_emails: {
+        Row: {
+          id: string;
+          email: string;
+          invited_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          invited_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          invited_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'allowed_emails_invited_by_fkey';
+            columns: ['invited_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       profiles: {
         Row: {
           created_at: string;
           display_name: string | null;
           id: string;
+          is_admin: boolean;
           updated_at: string;
         };
         Insert: {
           created_at?: string;
           display_name?: string | null;
           id: string;
+          is_admin?: boolean;
           updated_at?: string;
         };
         Update: {
           created_at?: string;
           display_name?: string | null;
           id?: string;
+          is_admin?: boolean;
           updated_at?: string;
         };
         Relationships: [];
