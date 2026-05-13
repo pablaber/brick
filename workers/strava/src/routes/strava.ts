@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { verifySignedConnectToken } from '@workout/shared';
+import { verifySignedConnectToken } from '@brick/shared';
 
 import type { Env } from '../env.js';
 import { createServiceSupabaseClient } from '../lib/supabase.js';

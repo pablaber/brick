@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { createSignedManualSyncToken } from '@workout/shared';
+import { createSignedManualSyncToken } from '@brick/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../env.js';

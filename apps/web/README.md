@@ -1,6 +1,6 @@
 # Web App (`apps/web`)
 
-SvelteKit frontend for the workout dashboard.
+SvelteKit frontend for Brick.
 
 ## Stack
 

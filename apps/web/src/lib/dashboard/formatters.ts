@@ -1,4 +1,4 @@
-import { metersToMiles } from '@workout/shared';
+import { metersToMiles } from '@brick/shared';
 
 export function formatMiles(miles: number | null | undefined): string {
   if (miles == null || !Number.isFinite(miles)) return '—';

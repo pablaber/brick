@@ -1,7 +1,7 @@
 import type {} from '../worker-configuration';
 
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import type { Database } from '@workout/shared';
+import type { Database } from '@brick/shared';
 
 declare global {
   namespace App {

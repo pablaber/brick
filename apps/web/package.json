@@ -37,7 +37,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
-    "@workout/shared": "workspace:^",
+    "@brick/shared": "workspace:^",
     "pino": "^10.3.1"
   }
 }

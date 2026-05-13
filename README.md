@@ -1,6 +1,6 @@
-# Workout Dashboard Monorepo
+# Brick Monorepo
 
-This repository is a `pnpm` + Turborepo monorepo for the workout tracking platform.
+This repository is a `pnpm` + Turborepo monorepo for the Brick tracking platform.
 
 ## Architecture
 
@@ -143,7 +143,7 @@ pnpm --filter web dev
 Terminal 2:
 
 ```bash
-pnpm --filter @workout/strava-worker dev
+pnpm --filter @brick/strava-worker dev
 ```
 
 Then open:

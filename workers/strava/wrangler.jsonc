@@ -1,8 +1,15 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "workout-dashboard-strava",
+  "name": "brick-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-08",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "logs": {
+      "invocation_logs": true
+    }
+  },
   "workers_dev": false,
   "dev": {
     "port": 8787
