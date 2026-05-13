@@ -34,7 +34,7 @@ Copy `.env.example` to `.env.local` and fill in values from `npx supabase status
 
 ```bash
 PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-status>
+PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon-key-from-supabase-status>
 STRAVA_WORKER_URL=http://localhost:8787
 WORKER_SHARED_SECRET=<must-match-worker-shared-secret>
 ```

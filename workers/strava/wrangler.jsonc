@@ -3,11 +3,12 @@
   "name": "workout-dashboard-strava",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-08",
-  "workers_dev": true,
+  "workers_dev": false,
   "dev": {
     "port": 8787
   },
   "triggers": {
     "crons": ["0 */6 * * *"]
-  }
+  },
+  "routes": [{ "pattern": "api.getbricked.fit", "custom_domain": true }]
 }

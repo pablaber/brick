@@ -58,7 +58,7 @@ Worker default URL: `http://localhost:8787`.
 Required:
 
 - `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 - `STRAVA_REDIRECT_URI`
@@ -135,7 +135,7 @@ The one-shot script starts Wrangler in scheduled test mode, waits for `/health`,
 Example commands:
 
 ```bash
-wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+wrangler secret put SUPABASE_SECRET_KEY
 wrangler secret put STRAVA_CLIENT_SECRET
 wrangler secret put WORKER_SHARED_SECRET
 ```

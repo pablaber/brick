@@ -3,6 +3,6 @@ import type { Database } from '@workout/shared';
 import { getSupabasePublicConfig } from '$lib/supabase-config';
 
 export const createClient = () => {
-  const { url, anonKey } = getSupabasePublicConfig();
-  return createBrowserClient<Database>(url, anonKey);
+  const { url, publishableKey } = getSupabasePublicConfig();
+  return createBrowserClient<Database>(url, publishableKey);
 };
