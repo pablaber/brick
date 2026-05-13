@@ -46,7 +46,10 @@ export const actions: Actions = {
 
     const allowed = await isEmailAllowed(email);
     if (!allowed) {
-      return fail(403, { error: 'Signups are invite-only. Contact the admin to request access.', email });
+      return fail(403, {
+        error: 'Signups are invite-only. Contact the admin to request access.',
+        email
+      });
     }
 
     const { data, error } = await locals.supabase.auth.signUp({ email, password });

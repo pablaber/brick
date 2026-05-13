@@ -5,7 +5,10 @@ export const load: PageServerLoad = async (event) => {
   const { serviceClient } = await requireAdmin(event);
 
   const [profilesResult, usersResult] = await Promise.all([
-    serviceClient.from('profiles').select('id, display_name, is_admin, created_at').order('created_at'),
+    serviceClient
+      .from('profiles')
+      .select('id, display_name, is_admin, created_at')
+      .order('created_at'),
     serviceClient.auth.admin.listUsers()
   ]);
 
