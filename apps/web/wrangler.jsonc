@@ -1,8 +1,15 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "web",
+  "name": "brick-web",
   "compatibility_date": "2026-05-08",
   "compatibility_flags": ["nodejs_als"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "logs": {
+      "invocation_logs": true
+    }
+  },
   "main": ".svelte-kit/cloudflare/_worker.js",
   "assets": {
     "binding": "ASSETS",
