@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@workout/shared';
+import type { Database } from '@brick/shared';
 
 import type { Env } from '../env.js';
 

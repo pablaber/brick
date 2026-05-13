@@ -38,7 +38,7 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.105.4
         version: 2.105.4
-      '@workout/shared':
+      '@brick/shared':
         specifier: workspace:^
         version: link:../../packages/shared
       pino:
@@ -111,7 +111,7 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.105.4
         version: 2.105.4
-      '@workout/shared':
+      '@brick/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       hono:

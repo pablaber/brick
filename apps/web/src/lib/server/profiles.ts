@@ -1,5 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import type { Database } from '@workout/shared';
+import type { Database } from '@brick/shared';
 
 export async function ensureProfile(supabase: SupabaseClient<Database>, user: User) {
   const displayName = user.email?.split('@')[0] ?? null;

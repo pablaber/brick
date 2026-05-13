@@ -1,4 +1,4 @@
-import type { StravaSummaryActivity } from '@workout/shared';
+import type { StravaSummaryActivity } from '@brick/shared';
 
 const STRAVA_ACTIVITIES_URL = 'https://www.strava.com/api/v3/athlete/activities';
 const STRAVA_ATHLETE_STATS_BASE_URL = 'https://www.strava.com/api/v3/athletes';

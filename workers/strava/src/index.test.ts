@@ -1,4 +1,4 @@
-import { createSignedConnectToken } from '@workout/shared';
+import { createSignedConnectToken } from '@brick/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockState = vi.hoisted(() => ({

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { verifySignedManualSyncToken } from '@workout/shared';
+import { verifySignedManualSyncToken } from '@brick/shared';
 
 import type { Env } from '../env.js';
 import { syncUserActivities } from '../lib/sync.js';

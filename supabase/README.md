@@ -1,6 +1,6 @@
 # Supabase Local Setup
 
-This directory contains local Supabase CLI configuration and database migrations for the workout dashboard.
+This directory contains local Supabase CLI configuration and database migrations for Brick.
 
 ## Start local Supabase
 

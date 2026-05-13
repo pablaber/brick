@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@workout/shared';
+import type { Database } from '@brick/shared';
 import { getSupabasePublicConfig } from '$lib/supabase-config';
 
 export const createClient = () => {

@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
-import { createSignedConnectToken } from '@workout/shared';
+import { createSignedConnectToken } from '@brick/shared';
 
 import { requireUser } from '$lib/server/auth';
 import { logger } from '$lib/server/logger';

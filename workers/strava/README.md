@@ -15,7 +15,7 @@ Tokens remain server-side in Supabase.
 3. Start the worker:
 
 ```bash
-pnpm --filter @workout/strava-worker dev
+pnpm --filter @brick/strava-worker dev
 ```
 
 Worker default URL: `http://localhost:8787`.
@@ -115,14 +115,14 @@ Cron does not auto-fire locally. Use one of these flows.
 Interactive:
 
 ```bash
-pnpm --filter @workout/strava-worker dev:scheduled
+pnpm --filter @brick/strava-worker dev:scheduled
 curl "http://localhost:8787/__scheduled?cron=0+*/6+*+*+*"
 ```
 
 One-shot:
 
 ```bash
-pnpm --filter @workout/strava-worker test:scheduled
+pnpm --filter @brick/strava-worker test:scheduled
 ```
 
 The one-shot script starts Wrangler in scheduled test mode, waits for `/health`, triggers `/__scheduled`, prints response output, and stops Wrangler.

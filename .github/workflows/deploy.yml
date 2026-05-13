@@ -101,13 +101,13 @@ jobs:
 
       - name: Sync Strava worker secrets
         run: |
-          printf '%s' "$SUPABASE_SECRET_KEY" | pnpm --filter @workout/strava-worker exec wrangler secret put SUPABASE_SECRET_KEY --config wrangler.jsonc
-          printf '%s' "$STRAVA_CLIENT_SECRET" | pnpm --filter @workout/strava-worker exec wrangler secret put STRAVA_CLIENT_SECRET --config wrangler.jsonc
-          printf '%s' "$WORKER_SHARED_SECRET" | pnpm --filter @workout/strava-worker exec wrangler secret put WORKER_SHARED_SECRET --config wrangler.jsonc
+          printf '%s' "$SUPABASE_SECRET_KEY" | pnpm --filter @brick/strava-worker exec wrangler secret put SUPABASE_SECRET_KEY --config wrangler.jsonc
+          printf '%s' "$STRAVA_CLIENT_SECRET" | pnpm --filter @brick/strava-worker exec wrangler secret put STRAVA_CLIENT_SECRET --config wrangler.jsonc
+          printf '%s' "$WORKER_SHARED_SECRET" | pnpm --filter @brick/strava-worker exec wrangler secret put WORKER_SHARED_SECRET --config wrangler.jsonc
 
       - name: Deploy Strava worker
         run: |
-          pnpm --filter @workout/strava-worker exec wrangler deploy \
+          pnpm --filter @brick/strava-worker exec wrangler deploy \
             --config wrangler.jsonc \
             --var "SUPABASE_URL:${SUPABASE_URL}" \
             --var "STRAVA_CLIENT_ID:${STRAVA_CLIENT_ID}" \
