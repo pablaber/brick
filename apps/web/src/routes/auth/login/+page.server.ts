@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { ensureProfile } from '$lib/server/profiles';
+import { isEmailAllowed } from '$lib/server/allowed-emails';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -7,6 +8,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (user) {
     redirect(303, '/dashboard');
   }
+  return { signupEnabled: false };
 };
 
 export const actions: Actions = {
@@ -40,6 +42,11 @@ export const actions: Actions = {
 
     if (!email || !password) {
       return fail(400, { error: 'Email and password are required.', email });
+    }
+
+    const allowed = await isEmailAllowed(email);
+    if (!allowed) {
+      return fail(403, { error: 'Signups are invite-only. Contact the admin to request access.', email });
     }
 
     const { data, error } = await locals.supabase.auth.signUp({ email, password });
