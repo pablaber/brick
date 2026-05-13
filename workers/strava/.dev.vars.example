@@ -1,7 +1,7 @@
 # Supabase project URL used by the worker for DB/API access.
 SUPABASE_URL=
-# Supabase service role key used by the worker for privileged DB writes.
-SUPABASE_SERVICE_ROLE_KEY=
+# Supabase secret key used by the worker for privileged DB writes.
+SUPABASE_SECRET_KEY=
 # Strava OAuth app client ID used for token exchange.
 STRAVA_CLIENT_ID=
 # Strava OAuth app client secret used for token exchange and refresh.

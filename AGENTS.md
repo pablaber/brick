@@ -51,7 +51,7 @@ Primary directories:
   - `src/lib/supabase.ts` — browser client factory (minimal, for future use).
 - Dashboard data is mock/placeholder only.
 - Navigation links use `resolve()` from `$app/paths` for base path safety.
-- Environment variables: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` via `$env/dynamic/public`.
+- Environment variables: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY` via `$env/dynamic/public`.
 
 ## Local Commands
 
@@ -82,7 +82,7 @@ From repo root:
 - Preserve Cloudflare adapter setup for web deploy target.
 - Keep UI responsive for desktop and mobile.
 - No Strava OAuth or sync logic yet.
-- No service role key in the SvelteKit app (only the public anon key).
+- No secret key in the SvelteKit app (only the public publishable key).
 
 ## Animations
 

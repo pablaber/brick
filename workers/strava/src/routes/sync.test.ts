@@ -12,7 +12,7 @@ vi.mock('../lib/sync.js', () => ({
 
 const env: Env = {
   SUPABASE_URL: 'http://127.0.0.1:54321',
-  SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+  SUPABASE_SECRET_KEY: 'secret-key',
   STRAVA_CLIENT_ID: '12345',
   STRAVA_CLIENT_SECRET: 'strava-secret',
   STRAVA_REDIRECT_URI: 'http://localhost:8787/strava/callback',

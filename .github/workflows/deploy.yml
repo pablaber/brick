@@ -1,0 +1,127 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Migrate and deploy production
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      STRAVA_CLIENT_ID: ${{ vars.STRAVA_CLIENT_ID }}
+
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+      WORKER_SHARED_SECRET: ${{ secrets.WORKER_SHARED_SECRET }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate required deploy configuration
+        run: |
+          for required in \
+            CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_API_TOKEN \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_DB_PASSWORD \
+            SUPABASE_PROJECT_ID \
+            SUPABASE_PUBLISHABLE_KEY \
+            SUPABASE_SECRET_KEY \
+            STRAVA_CLIENT_ID \
+            STRAVA_CLIENT_SECRET \
+            WORKER_SHARED_SECRET; do
+            if [ -z "${!required}" ]; then
+              echo "Missing required value: ${required}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Derive production runtime values
+        run: |
+          echo "SUPABASE_URL=https://${SUPABASE_PROJECT_ID}.supabase.co" >> "$GITHUB_ENV"
+          echo "PUBLIC_SUPABASE_URL=https://${SUPABASE_PROJECT_ID}.supabase.co" >> "$GITHUB_ENV"
+          echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}" >> "$GITHUB_ENV"
+          echo "STRAVA_WORKER_URL=https://api.getbricked.fit" >> "$GITHUB_ENV"
+          echo "STRAVA_REDIRECT_URI=https://api.getbricked.fit/strava/callback" >> "$GITHUB_ENV"
+          echo "APP_URL=https://getbricked.fit" >> "$GITHUB_ENV"
+
+      - name: Check formatting
+        run: pnpm format
+
+      - name: Run type checks
+        run: pnpm check
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Apply Supabase migrations
+        run: supabase db push
+
+      - name: Sync Strava worker secrets
+        run: |
+          printf '%s' "$SUPABASE_SECRET_KEY" | pnpm --filter @workout/strava-worker exec wrangler secret put SUPABASE_SECRET_KEY --config wrangler.jsonc
+          printf '%s' "$STRAVA_CLIENT_SECRET" | pnpm --filter @workout/strava-worker exec wrangler secret put STRAVA_CLIENT_SECRET --config wrangler.jsonc
+          printf '%s' "$WORKER_SHARED_SECRET" | pnpm --filter @workout/strava-worker exec wrangler secret put WORKER_SHARED_SECRET --config wrangler.jsonc
+
+      - name: Deploy Strava worker
+        run: |
+          pnpm --filter @workout/strava-worker exec wrangler deploy \
+            --config wrangler.jsonc \
+            --var "SUPABASE_URL:${SUPABASE_URL}" \
+            --var "STRAVA_CLIENT_ID:${STRAVA_CLIENT_ID}" \
+            --var "STRAVA_REDIRECT_URI:${STRAVA_REDIRECT_URI}" \
+            --var "APP_URL:${APP_URL}"
+
+      - name: Sync web worker secrets
+        run: |
+          printf '%s' "$WORKER_SHARED_SECRET" | pnpm --filter web exec wrangler secret put WORKER_SHARED_SECRET --config wrangler.jsonc
+
+      - name: Deploy web app
+        run: |
+          pnpm --filter web exec wrangler deploy \
+            --config wrangler.jsonc \
+            --var "PUBLIC_SUPABASE_URL:${PUBLIC_SUPABASE_URL}" \
+            --var "PUBLIC_SUPABASE_PUBLISHABLE_KEY:${PUBLIC_SUPABASE_PUBLISHABLE_KEY}" \
+            --var "STRAVA_WORKER_URL:${STRAVA_WORKER_URL}"

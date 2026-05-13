@@ -68,11 +68,11 @@ npx supabase start
 npx supabase status
 ```
 
-Copy the API URL and `anon key` from `supabase status` output into `apps/web/.env.local`:
+Copy the API URL and publishable key (anon key value) from `supabase status` output into `apps/web/.env.local`:
 
 ```bash
 PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-status>
+PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon-key-from-supabase-status>
 ```
 
 See `apps/web/.env.example` for a template.
@@ -108,7 +108,7 @@ Copy `workers/strava/.dev.vars.example` to `workers/strava/.dev.vars` and set:
 
 ```bash
 SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_SERVICE_ROLE_KEY=<supabase-service-role-key>
+SUPABASE_SECRET_KEY=<supabase-secret-key>
 STRAVA_CLIENT_ID=<strava-client-id>
 STRAVA_CLIENT_SECRET=<strava-client-secret>
 STRAVA_REDIRECT_URI=http://localhost:8787/strava/callback
@@ -122,14 +122,14 @@ Copy `apps/web/.env.example` to `apps/web/.env.local` and set:
 
 ```bash
 PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-PUBLIC_SUPABASE_ANON_KEY=<supabase-anon-key>
+PUBLIC_SUPABASE_PUBLISHABLE_KEY=<supabase-anon-key>
 STRAVA_WORKER_URL=http://localhost:8787
 WORKER_SHARED_SECRET=<must-match-worker-shared-secret>
 ```
 
 Important:
 
-- `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, and `WORKER_SHARED_SECRET` must never be in public/browser vars.
+- `SUPABASE_SECRET_KEY`, `STRAVA_CLIENT_SECRET`, and `WORKER_SHARED_SECRET` must never be in public/browser vars.
 - `WORKER_SHARED_SECRET` must match between web server env and worker env.
 
 ### 4) Run local OAuth flow
@@ -199,6 +199,58 @@ Local development setup and schema docs are in `supabase/README.md`.
 
 Tables: `profiles`, `strava_connections`, `oauth_states`, `activities`, `sync_runs`.
 Views: `weekly_activity_breakdown`, `monthly_activity_breakdown`, `yearly_activity_breakdown`.
+
+## Production Deploy Pipeline
+
+Production deploys run via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+
+- Triggers: pushes to `main` and manual `workflow_dispatch`.
+- Runtime order:
+  1. `pnpm format`
+  2. `pnpm check`
+  3. `pnpm lint`
+  4. `pnpm test`
+  5. `pnpm build`
+  6. `supabase link --project-ref "$SUPABASE_PROJECT_ID"`
+  7. `supabase db push`
+  8. Deploy `workers/strava`
+  9. Deploy `apps/web`
+- Derived runtime values:
+  - `SUPABASE_URL=https://${SUPABASE_PROJECT_ID}.supabase.co`
+  - `PUBLIC_SUPABASE_URL=https://${SUPABASE_PROJECT_ID}.supabase.co`
+  - `PUBLIC_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}`
+  - `STRAVA_WORKER_URL=https://api.getbricked.fit`
+  - `STRAVA_REDIRECT_URI=https://api.getbricked.fit/strava/callback`
+  - `APP_URL=https://getbricked.fit`
+
+### GitHub configuration
+
+Required secrets:
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_DB_PASSWORD`
+- `SUPABASE_SECRET_KEY`
+- `STRAVA_CLIENT_SECRET`
+- `WORKER_SHARED_SECRET`
+
+Required variables:
+
+- `SUPABASE_PROJECT_ID`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `STRAVA_CLIENT_ID`
+
+### First deploy smoke test checklist
+
+1. Run the deploy workflow manually with `workflow_dispatch`.
+2. Confirm `supabase db push` reports applied changes or no pending migrations.
+3. Confirm `https://api.getbricked.fit/health` returns health JSON.
+4. Confirm `https://getbricked.fit` loads.
+5. Log in or sign up and verify auth succeeds.
+6. Open `/settings`, connect Strava, and confirm redirect to `/settings?strava=connected`.
+7. Trigger `Sync now` and confirm new `sync_runs` and `activities` rows in Supabase.
+8. Confirm browser payloads do not expose `SUPABASE_SECRET_KEY`, `STRAVA_CLIENT_SECRET`, or Strava tokens.
 
 ## Current non-goals
 

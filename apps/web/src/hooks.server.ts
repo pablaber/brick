@@ -3,9 +3,9 @@ import type { Handle } from '@sveltejs/kit';
 import { getSupabasePublicConfig } from '$lib/supabase-config';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  const { url, anonKey } = getSupabasePublicConfig();
+  const { url, publishableKey } = getSupabasePublicConfig();
 
-  event.locals.supabase = createServerClient(url, anonKey, {
+  event.locals.supabase = createServerClient(url, publishableKey, {
     cookies: {
       getAll: () => event.cookies.getAll(),
       setAll: (cookiesToSet) => {
