@@ -44,13 +44,7 @@
 						class={`nav-link ${isActive('/settings') ? 'active' : ''}`}
 						href={resolve('/settings')}>Settings</a
 					>
-					{#if user.isAdmin}
-						<a
-							class={`nav-link ${isActive('/admin') ? 'active' : ''}`}
-							href={resolve('/admin')}>Admin</a
-						>
-					{/if}
-					<form method="POST" action={resolve('/auth/logout')} style="display:contents">
+	<form method="POST" action={resolve('/auth/logout')} style="display:contents">
 						<button class="nav-link nav-button" type="submit">Log out</button>
 					</form>
 				{:else}
