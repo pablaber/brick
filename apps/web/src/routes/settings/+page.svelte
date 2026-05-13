@@ -1,8 +1,17 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
+	import { onMount, tick, untrack } from 'svelte';
+	import { slide } from 'svelte/transition';
 
-	let { data } = $props();
+	let { data, form } = $props();
+	type SettingsFormFeedback = {
+		scope: 'profile' | 'colors' | 'goals';
+		error?: string;
+		success?: string;
+		goalType?: string;
+	};
+	const settingsForm = $derived((form?.settingsForm as SettingsFormFeedback | undefined) ?? null);
 	let isSyncing = $state(false);
 	let syncProgressFetched = $state(0);
 	let syncProgressTotal = $state<number | null>(null);
@@ -10,6 +19,28 @@
 	let syncProgressPercent = $state(0);
 
 	let syncDetailsOpen = $state(false);
+
+	let colorsOpen = $state(false);
+	let goalsOpen = $state(false);
+	let stravaOpen = $state(untrack(() => !data.strava.connected));
+	let displayNameEditing = $state(false);
+	let displayNameValue = $state(untrack(() => data.displayName ?? ''));
+	let displayNameSaving = $state(false);
+	let displayNameInput = $state<HTMLInputElement | null>(null);
+
+	let colorValues = $state(untrack(() => ({ ...data.settings.colors })));
+	let colorSaving = $state(false);
+	let colorSaved = $state(false);
+	const colorIndicator = $derived.by(() => {
+		const hasUnsaved = data.settings.categories.some((c) =>
+			colorValues[c]?.toUpperCase() !== data.settings.colors[c]?.toUpperCase()
+		);
+		if (hasUnsaved) return 'unsaved' as const;
+		return colorSaved ? 'saved' as const : 'idle' as const;
+	});
+
+	let goalSaving = $state<Record<string, 'save' | 'deactivate' | false>>({});
+	let goalSaved = $state<Record<string, boolean>>({});
 
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastDismissing = $state(false);
@@ -54,6 +85,7 @@
 			window.history.replaceState({}, '', url.toString());
 		}
 	});
+
 
 	const stravaResultMessage: Record<string, string> = {
 		connected: 'Strava connected successfully.',
@@ -107,6 +139,18 @@
 		return Math.max(1, Math.ceil(total * ESTIMATED_ACTIVITY_BUFFER_MULTIPLIER));
 	}
 
+	function formatCategoryName(category: string): string {
+		return category.charAt(0).toUpperCase() + category.slice(1);
+	}
+
+	async function beginDisplayNameEditing() {
+		displayNameEditing = true;
+		displayNameValue = data.displayName ?? '';
+		await tick();
+		displayNameInput?.focus();
+		displayNameInput?.select();
+	}
+
 	async function onSyncSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		if (isSyncing) {
@@ -148,10 +192,11 @@
 
 				syncProgressFetched = body.totalActivitiesFetched ?? syncProgressFetched;
 				if (body.estimatedTotalActivities != null) {
-					estimatedTotalActivities = Math.max(
-						estimatedTotalActivities ?? 0,
-						inflateEstimatedActivityTotal(body.estimatedTotalActivities)
-					);
+					const normalizedEstimatedTotal = Math.max(1, Math.floor(body.estimatedTotalActivities));
+					estimatedTotalActivities =
+						estimatedTotalActivities == null
+							? inflateEstimatedActivityTotal(normalizedEstimatedTotal)
+							: Math.max(estimatedTotalActivities, normalizedEstimatedTotal);
 				}
 				syncProgressTotal =
 					estimatedTotalActivities != null
@@ -203,20 +248,219 @@
 				<span>Email</span>
 				<strong>{data.email}</strong>
 			</li>
-			<li class="list-item">
+			<li class="list-item display-name-row">
 				<span>Display Name</span>
-				<strong>{data.displayName ?? 'Not set'}</strong>
+				<div class="display-name-area">
+					{#if displayNameEditing}
+						<form
+							method="POST"
+							action="?/saveDisplayName"
+							class="display-name-form"
+							use:enhance={() => {
+								displayNameSaving = true;
+								return async ({ result, update }) => {
+									await update({ reset: false });
+									displayNameSaving = false;
+
+									const settingsFeedback = (result as { data?: { settingsForm?: SettingsFormFeedback } })
+										.data?.settingsForm;
+
+									if (result.type === 'success') {
+										displayNameEditing = false;
+										showToast(settingsFeedback?.success ?? 'Display name saved.', 'success');
+									} else if (result.type === 'failure') {
+										showToast(settingsFeedback?.error ?? 'Unable to save display name right now.', 'error');
+									} else if (result.type === 'error') {
+										showToast('Unable to save display name right now.', 'error');
+									}
+								};
+							}}
+						>
+							<input
+								class="text-input display-name-input"
+								type="text"
+								name="displayName"
+								maxlength={80}
+								placeholder="Enter display name"
+								bind:value={displayNameValue}
+								bind:this={displayNameInput}
+							/>
+							<button type="submit" class="primary-button" disabled={displayNameSaving}>
+								{displayNameSaving ? 'Saving…' : 'Save'}
+							</button>
+							<button
+								type="button"
+								class="secondary-button"
+								disabled={displayNameSaving}
+								onclick={() => {
+									displayNameEditing = false;
+									displayNameValue = data.displayName ?? '';
+								}}
+							>
+								Cancel
+							</button>
+						</form>
+					{:else}
+						<div class="display-name-static">
+							<strong>{data.displayName ?? 'Not set'}</strong>
+							<button
+								type="button"
+								class="icon-button"
+								aria-label="Edit display name"
+								onclick={beginDisplayNameEditing}
+							>
+								&#9998;
+							</button>
+						</div>
+					{/if}
+				</div>
 			</li>
 		</ul>
 	</div>
 
+	{#if data.strava.connected}
 	<div class="card card-sectioned">
-		<div class="card-heading">
-			<h2>Strava</h2>
-			{#if data.strava.connected}
-				<span class="status-bubble status-success heading-status">Connected</span>
+		<button class="card-heading card-heading-toggle" onclick={() => colorsOpen = !colorsOpen}>
+			<h2>Sport Colors</h2>
+			<span class="chevron" class:chevron-open={colorsOpen}>&#9656;</span>
+		</button>
+		{#if colorsOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
+		<div class="settings-block">
+			<p class="metric-caption">Customize dashboard category colors.</p>
+			{#if settingsForm?.scope === 'colors' && settingsForm.error}
+				<p class="form-error">{settingsForm.error}</p>
 			{/if}
+			<form method="POST" action="?/saveSportColors" class="form-stack compact-form" use:enhance={() => {
+				colorSaving = true;
+				return async ({ result, update }) => {
+					await update({ reset: false });
+					colorSaving = false;
+					if (result.type === 'success') colorSaved = true;
+				};
+			}}>
+				<div class="color-grid">
+					{#each data.settings.categories as category (category)}
+						<label class="color-field">
+							<span>{formatCategoryName(category)}</span>
+							<input
+								class="color-input"
+								type="color"
+								name={category}
+								bind:value={colorValues[category]}
+								required
+							/>
+							<code>{colorValues[category].toUpperCase()}</code>
+						</label>
+					{/each}
+				</div>
+				<div class="color-actions">
+					<button type="submit" class="primary-button save-button" disabled={colorSaving}>
+						<span class="save-button-text" class:save-button-text-hidden={colorSaving}>Save Colors</span>
+						<span class="save-button-text save-button-text-overlay" class:save-button-text-hidden={!colorSaving}>Saving…</span>
+					</button>
+					<button type="button" class="secondary-button" disabled={colorSaving} onclick={() => {
+						colorValues = { ...data.settings.defaultColors };
+					}}>Reset to Defaults</button>
+					<span class="save-indicator" class:save-indicator-visible={colorIndicator !== 'idle'}>
+						{#if colorIndicator === 'unsaved'}
+							<span class="save-indicator-unsaved">Unsaved changes</span>
+						{:else if colorIndicator === 'saved'}
+							<span class="save-indicator-saved">Changes saved</span>
+						{/if}
+					</span>
+				</div>
+			</form>
 		</div>
+		</div>
+		{/if}
+	</div>
+	{/if}
+
+	{#if data.strava.connected}
+	<div class="card card-sectioned">
+		<button class="card-heading card-heading-toggle" onclick={() => goalsOpen = !goalsOpen}>
+			<h2>Goals</h2>
+			<span class="chevron" class:chevron-open={goalsOpen}>&#9656;</span>
+		</button>
+		{#if goalsOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
+		<div class="settings-block goals-stack">
+			<p class="metric-caption">Set optional goals that appear on the dashboard.</p>
+			{#if settingsForm?.scope === 'goals' && settingsForm.error}
+				<p class="form-error">{settingsForm.error}</p>
+			{/if}
+			{#each data.settings.goalDefinitions as definition (definition.goalType)}
+				{@const activeGoal = data.settings.activeGoals[definition.goalType]}
+				<div class="goal-row">
+					<div class="goal-head">
+						<strong>{definition.label}</strong>
+						<span class="goal-meta">{definition.period} · {definition.unit}</span>
+					</div>
+					{#if activeGoal}
+						<p class="metric-caption">Current target: {activeGoal.targetValue} {definition.unit}</p>
+					{/if}
+					<form method="POST" action="?/saveGoal" class="goal-form" use:enhance={(e) => {
+						const isDeactivate = e.formData.get('mode') === 'deactivate';
+						goalSaving = { ...goalSaving, [definition.goalType]: isDeactivate ? 'deactivate' : 'save' };
+						return async ({ result, update }) => {
+							await update({ reset: false });
+							goalSaving = { ...goalSaving, [definition.goalType]: false };
+							if (result.type === 'success') goalSaved = { ...goalSaved, [definition.goalType]: true };
+						};
+					}}>
+						<input type="hidden" name="goalType" value={definition.goalType} />
+						<label>
+							<span>Target</span>
+							<input
+								class="text-input"
+								type="number"
+								name="targetValue"
+								step={definition.step}
+								min={definition.min}
+								max={definition.max}
+								value={activeGoal?.targetValue ?? ''}
+								placeholder={`Enter ${definition.unit}`}
+								required
+								oninput={() => { goalSaved = { ...goalSaved, [definition.goalType]: false }; }}
+							/>
+						</label>
+						<div class="goal-actions">
+							<button type="submit" class="primary-button save-button" disabled={!!goalSaving[definition.goalType]}>
+								<span class="save-button-text" class:save-button-text-hidden={goalSaving[definition.goalType] === 'save'}>Save Goal</span>
+								<span class="save-button-text save-button-text-overlay" class:save-button-text-hidden={goalSaving[definition.goalType] !== 'save'}>Saving…</span>
+							</button>
+							{#if activeGoal}
+								<button type="submit" class="destructive-button save-button" name="mode" value="deactivate" disabled={!!goalSaving[definition.goalType]}>
+									<span class="save-button-text" class:save-button-text-hidden={goalSaving[definition.goalType] === 'deactivate'}>Remove Goal</span>
+									<span class="save-button-text save-button-text-overlay" class:save-button-text-hidden={goalSaving[definition.goalType] !== 'deactivate'}>Removing…</span>
+								</button>
+							{/if}
+							<span class="save-indicator" class:save-indicator-visible={goalSaved[definition.goalType]}>
+								<span class="save-indicator-saved">Changes saved</span>
+							</span>
+						</div>
+					</form>
+				</div>
+			{/each}
+		</div>
+		</div>
+		{/if}
+	</div>
+	{/if}
+
+	<div class="card card-sectioned">
+		<button class="card-heading card-heading-toggle" onclick={() => stravaOpen = !stravaOpen}>
+			<h2>Strava</h2>
+			<span class="card-heading-right">
+				{#if data.strava.connected}
+					<span class="status-bubble status-success heading-status">Connected</span>
+				{/if}
+				<span class="chevron" class:chevron-open={stravaOpen}>&#9656;</span>
+			</span>
+		</button>
+		{#if stravaOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
 		{#if data.strava.connected}
 			<ul class="list">
 				<li class="list-item">
@@ -382,6 +626,8 @@
 				</form>
 			</div>
 		{/if}
+		</div>
+		{/if}
 	</div>
 </section>
 
@@ -426,8 +672,194 @@
 		color: var(--text-muted);
 	}
 
-	.card-sectioned > :last-child {
+	.card-sectioned > :last-child:not(.card-heading) {
 		padding-bottom: 1rem;
+	}
+
+	.display-name-row {
+		align-items: center;
+	}
+
+	.display-name-area {
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		min-width: 0;
+	}
+
+	.display-name-form {
+		display: inline-flex;
+		flex-wrap: nowrap;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.display-name-input {
+		width: clamp(10rem, 16vw, 14rem);
+	}
+
+	.display-name-static {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.icon-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.85rem;
+		height: 1.85rem;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: #fff;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.95rem;
+		line-height: 1;
+	}
+
+	.icon-button:hover {
+		background: var(--surface-subtle);
+		color: var(--text);
+		border-color: var(--text-muted);
+	}
+
+	.settings-block {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.compact-form {
+		margin-top: 0;
+	}
+
+	.color-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 0.75rem;
+	}
+
+	.color-field {
+		display: grid;
+		gap: 0.4rem;
+	}
+
+	.color-field code {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.color-input {
+		width: 100%;
+		height: 2.4rem;
+		border: 1px solid var(--line);
+		border-radius: 0.5rem;
+		background: transparent;
+		padding: 0.15rem;
+	}
+
+	.goals-stack {
+		gap: 1rem;
+	}
+
+	.goal-row {
+		border: 1px solid var(--line);
+		border-radius: 0.75rem;
+		padding: 0.75rem;
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.goal-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.goal-meta {
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--text-muted);
+	}
+
+	.goal-form {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.goal-form label {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.goal-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.color-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.save-indicator {
+		font-size: 0.82rem;
+		font-weight: 500;
+		opacity: 0;
+		transition: opacity 200ms ease;
+	}
+
+	.save-indicator-visible {
+		opacity: 1;
+	}
+
+	.save-indicator-unsaved {
+		color: var(--text-muted);
+	}
+
+	.save-indicator-saved {
+		color: var(--ok);
+	}
+
+	.save-button {
+		display: grid;
+		grid-template-areas: "text";
+	}
+
+	.save-button-text {
+		grid-area: text;
+		transition: opacity 150ms ease;
+	}
+
+	.save-button-text-hidden {
+		opacity: 0;
+	}
+
+	.save-button-text-overlay {
+		pointer-events: none;
+	}
+
+	.secondary-button {
+		border: 1px solid var(--line);
+		border-radius: 0.6rem;
+		padding: 0.65rem 0.8rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		background: #fff;
+		cursor: pointer;
+	}
+
+	.secondary-button:hover {
+		background: var(--surface-subtle);
+		border-color: var(--text-muted);
 	}
 
 	.card-heading {
@@ -438,6 +870,44 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem;
+	}
+
+	.card-heading-toggle {
+		width: 100%;
+		border: none;
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		transition: background 120ms ease-in-out;
+	}
+
+	.card-heading-toggle:hover {
+		background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+	}
+
+	.card-heading-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.chevron {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.75rem;
+		line-height: 1;
+		color: var(--text-muted);
+		transition: transform 200ms ease;
+	}
+
+	.chevron-open {
+		transform: rotate(90deg);
+	}
+
+	.collapsible-body {
+		overflow: hidden;
 	}
 
 	.card-heading h2 {
@@ -486,7 +956,7 @@
 		padding: 0.15rem 0.45rem;
 	}
 
-	.card-sectioned > .sync-details {
+	.card-sectioned .sync-details {
 		margin-top: 0.25rem;
 		border-top: 1px solid var(--line);
 		background: var(--surface-subtle);
@@ -518,7 +988,7 @@
 		margin: 0;
 	}
 
-	.card-sectioned > .list + .list {
+	.card-sectioned .list + .list {
 		margin-top: 0.4rem;
 		padding-top: 0.6rem;
 		border-top: 1px solid var(--line);

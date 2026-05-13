@@ -45,7 +45,6 @@ This writes generated types to `packages/shared/src/database.types.ts`.
 
 ## View summary
 
-- `public.weekly_activity_minutes`: weekly moving minutes and activity count by sport.
-- `public.monthly_distance_by_sport`: monthly distance (meters/miles) and activity count by sport.
-- `public.yearly_running_distance`: yearly running-only distance totals (meters/miles).
-- `public.weekly_sport_breakdown`: weekly totals for moving time and distance by sport.
+- `public.weekly_activity_breakdown`: weekly totals for moving time and distance by sport.
+- `public.monthly_activity_breakdown`: monthly totals for moving time and distance by sport.
+- `public.yearly_activity_breakdown`: yearly totals for moving time and distance by sport.

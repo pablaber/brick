@@ -161,9 +161,9 @@ export type Database = {
           created_at: string;
           error: string | null;
           id: string;
-          sync_type: string;
           started_at: string;
           status: string;
+          sync_type: string;
           user_id: string;
         };
         Insert: {
@@ -173,9 +173,9 @@ export type Database = {
           created_at?: string;
           error?: string | null;
           id?: string;
-          sync_type?: string;
           started_at?: string;
           status: string;
+          sync_type?: string;
           user_id: string;
         };
         Update: {
@@ -185,55 +185,141 @@ export type Database = {
           created_at?: string;
           error?: string | null;
           id?: string;
-          sync_type?: string;
           started_at?: string;
           status?: string;
+          sync_type?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      user_dashboard_preferences: {
+        Row: {
+          created_at: string;
+          preferences: Json;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          preferences?: Json;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          preferences?: Json;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      user_goals: {
+        Row: {
+          created_at: string;
+          ends_on: string | null;
+          goal_type: string;
+          id: string;
+          is_active: boolean;
+          period: string;
+          sport_category: string | null;
+          starts_on: string | null;
+          target_value: number;
+          unit: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          ends_on?: string | null;
+          goal_type: string;
+          id?: string;
+          is_active?: boolean;
+          period: string;
+          sport_category?: string | null;
+          starts_on?: string | null;
+          target_value: number;
+          unit: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          ends_on?: string | null;
+          goal_type?: string;
+          id?: string;
+          is_active?: boolean;
+          period?: string;
+          sport_category?: string | null;
+          starts_on?: string | null;
+          target_value?: number;
+          unit?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      user_sport_category_settings: {
+        Row: {
+          category: string;
+          color_hex: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          category: string;
+          color_hex: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          category?: string;
+          color_hex?: string;
+          created_at?: string;
+          updated_at?: string;
           user_id?: string;
         };
         Relationships: [];
       };
     };
     Views: {
-      monthly_distance_by_sport: {
+      monthly_activity_breakdown: {
         Row: {
           activity_count: number | null;
-          month_start: string | null;
           sport_type: string | null;
           total_distance_meters: number | null;
           total_distance_miles: number | null;
-          user_id: string | null;
-        };
-        Relationships: [];
-      };
-      weekly_activity_minutes: {
-        Row: {
-          activity_count: number | null;
-          sport_type: string | null;
-          total_moving_minutes: number | null;
-          user_id: string | null;
-          week_start: string | null;
-        };
-        Relationships: [];
-      };
-      weekly_sport_breakdown: {
-        Row: {
-          activity_count: number | null;
-          sport_type: string | null;
-          total_distance_meters: number | null;
           total_moving_minutes: number | null;
           total_moving_seconds: number | null;
           user_id: string | null;
-          week_start: string | null;
+          period_start: string | null;
         };
         Relationships: [];
       };
-      yearly_running_distance: {
+      weekly_activity_breakdown: {
         Row: {
           activity_count: number | null;
+          period_start: string | null;
+          sport_type: string | null;
           total_distance_meters: number | null;
           total_distance_miles: number | null;
+          total_moving_minutes: number | null;
+          total_moving_seconds: number | null;
           user_id: string | null;
-          year_start: string | null;
+        };
+        Relationships: [];
+      };
+      yearly_activity_breakdown: {
+        Row: {
+          activity_count: number | null;
+          period_start: string | null;
+          sport_type: string | null;
+          total_distance_meters: number | null;
+          total_distance_miles: number | null;
+          total_moving_minutes: number | null;
+          total_moving_seconds: number | null;
+          user_id: string | null;
         };
         Relationships: [];
       };

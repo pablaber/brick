@@ -1,0 +1,1 @@
+export const DASHBOARD_COMPACT_CHART_HEIGHT_PX = 64;

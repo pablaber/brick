@@ -1,9 +1,23 @@
+import { fail } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { ensureProfile } from '$lib/server/profiles';
-import type { PageServerLoad } from './$types';
+import {
+  DEFAULT_CATEGORY_COLORS,
+  GOAL_DEFINITIONS,
+  SPORT_CATEGORIES,
+  deactivateGoal,
+  loadUserSettings,
+  parseGoalType,
+  upsertGoal,
+  upsertSportCategoryColors,
+  validateCategoryColors,
+  validateGoalTarget
+} from '$lib/server/user-settings';
+import type { Actions, PageServerLoad } from './$types';
 
 const STRAVA_RESULTS = new Set(['connected', 'denied', 'invalid_state', 'error']);
 const SYNC_RESULTS = new Set(['success', 'error', 'running', 'not_connected']);
+const DISPLAY_NAME_MAX_LENGTH = 80;
 
 export const load: PageServerLoad = async (event) => {
   const user = await requireUser(event);
@@ -47,6 +61,8 @@ export const load: PageServerLoad = async (event) => {
     .limit(1)
     .maybeSingle();
 
+  const userSettings = await loadUserSettings(event.locals.supabase, user.id);
+
   const stravaResultQuery = event.url.searchParams.get('strava');
   const stravaResult =
     stravaResultQuery && STRAVA_RESULTS.has(stravaResultQuery) ? stravaResultQuery : null;
@@ -59,6 +75,13 @@ export const load: PageServerLoad = async (event) => {
     displayName: profile?.display_name ?? null,
     stravaResult,
     syncResult,
+    settings: {
+      colors: userSettings.colors,
+      defaultColors: DEFAULT_CATEGORY_COLORS,
+      activeGoals: userSettings.activeGoals,
+      categories: SPORT_CATEGORIES,
+      goalDefinitions: Object.values(GOAL_DEFINITIONS)
+    },
     strava: stravaConnection
       ? {
           connected: true,
@@ -110,4 +133,146 @@ export const load: PageServerLoad = async (event) => {
         }
       : null
   };
+};
+
+export const actions: Actions = {
+  saveDisplayName: async (event) => {
+    const user = await requireUser(event);
+    const formData = await event.request.formData();
+    const displayNameInput = formData.get('displayName')?.toString() ?? '';
+    const displayName = displayNameInput.trim();
+
+    if (displayName.length > DISPLAY_NAME_MAX_LENGTH) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'profile',
+          error: `Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer.`
+        }
+      });
+    }
+
+    const { error } = await event.locals.supabase.from('profiles').upsert(
+      {
+        id: user.id,
+        display_name: displayName.length > 0 ? displayName : null
+      },
+      { onConflict: 'id' }
+    );
+
+    if (error) {
+      console.error('Unable to save display name', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'profile',
+          error: 'Unable to save display name right now.'
+        }
+      });
+    }
+
+    return {
+      settingsForm: {
+        scope: 'profile',
+        success: 'Display name saved.'
+      }
+    };
+  },
+
+  saveSportColors: async (event) => {
+    const user = await requireUser(event);
+    const formData = await event.request.formData();
+
+    const parsed = validateCategoryColors({
+      running: formData.get('running')?.toString(),
+      cycling: formData.get('cycling')?.toString(),
+      swimming: formData.get('swimming')?.toString(),
+      other: formData.get('other')?.toString()
+    });
+
+    if (parsed.error || !parsed.colors) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'colors',
+          error: parsed.error ?? 'Invalid color values.'
+        }
+      });
+    }
+
+    try {
+      await upsertSportCategoryColors(event.locals.supabase, user.id, parsed.colors);
+      return {
+        settingsForm: {
+          scope: 'colors',
+          success: 'Sport colors updated.'
+        }
+      };
+    } catch (error) {
+      console.error('Unable to save sport colors', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'colors',
+          error: 'Unable to save sport colors right now.'
+        }
+      });
+    }
+  },
+
+  saveGoal: async (event) => {
+    const user = await requireUser(event);
+    const formData = await event.request.formData();
+
+    const goalType = parseGoalType(formData.get('goalType'));
+    if (!goalType) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'goals',
+          error: 'Invalid goal type.'
+        }
+      });
+    }
+
+    const mode = formData.get('mode')?.toString();
+
+    try {
+      if (mode === 'deactivate') {
+        await deactivateGoal(event.locals.supabase, user.id, goalType);
+        return {
+          settingsForm: {
+            scope: 'goals',
+            success: `${GOAL_DEFINITIONS[goalType].label} goal removed.`
+          }
+        };
+      }
+
+      const rawTarget = formData.get('targetValue')?.toString() ?? '';
+      const validation = validateGoalTarget(goalType, rawTarget);
+
+      if (validation.error || validation.value == null) {
+        return fail(400, {
+          settingsForm: {
+            scope: 'goals',
+            goalType,
+            error: validation.error ?? 'Invalid goal target.'
+          }
+        });
+      }
+
+      await upsertGoal(event.locals.supabase, user.id, goalType, validation.value);
+
+      return {
+        settingsForm: {
+          scope: 'goals',
+          success: `${GOAL_DEFINITIONS[goalType].label} goal saved.`
+        }
+      };
+    } catch (error) {
+      console.error('Unable to save goal', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'goals',
+          goalType,
+          error: 'Unable to save goal right now.'
+        }
+      });
+    }
+  }
 };

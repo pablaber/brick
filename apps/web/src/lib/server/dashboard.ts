@@ -74,51 +74,67 @@ export async function getRecentActivities(supabase: Supabase, userId: string, li
   }));
 }
 
-export async function getWeeklyActivityMinutes(supabase: Supabase, userId: string, weeksBack = 16) {
+export async function getTrainingDurationActivities(supabase: Supabase, userId: string) {
+  const since = dateStringWeeksAgo(26);
   const { data, error } = await supabase
-    .from('weekly_activity_minutes')
-    .select('week_start, sport_type, total_moving_minutes, activity_count')
+    .from('activities')
+    .select('id, strava_activity_id, name, sport_type, start_date, moving_time_seconds')
     .eq('user_id', userId)
-    .gte('week_start', dateStringWeeksAgo(weeksBack))
-    .order('week_start', { ascending: true });
+    .gte('start_date', since)
+    .order('start_date', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    stravaActivityId: row.strava_activity_id,
+    name: row.name,
+    sportType: row.sport_type,
+    startDate: row.start_date,
+    movingTimeSeconds: row.moving_time_seconds
+  }));
+}
+
+export async function getWeeklyActivityBreakdown(
+  supabase: Supabase,
+  userId: string,
+  weeksBack = 16
+) {
+  const { data, error } = await supabase
+    .from('weekly_activity_breakdown')
+    .select(
+      'period_start, sport_type, total_moving_minutes, total_moving_seconds, total_distance_meters, total_distance_miles, activity_count'
+    )
+    .eq('user_id', userId)
+    .gte('period_start', dateStringWeeksAgo(weeksBack))
+    .order('period_start', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
 
-export async function getMonthlyDistanceBySport(
+export async function getMonthlyActivityBreakdown(
   supabase: Supabase,
   userId: string,
   monthsBack = 12
 ) {
   const { data, error } = await supabase
-    .from('monthly_distance_by_sport')
-    .select('month_start, sport_type, total_distance_miles, total_distance_meters, activity_count')
-    .eq('user_id', userId)
-    .gte('month_start', dateStringMonthsAgo(monthsBack))
-    .order('month_start', { ascending: true });
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getYearlyRunningDistance(supabase: Supabase, userId: string) {
-  const { data, error } = await supabase
-    .from('yearly_running_distance')
-    .select('year_start, total_distance_miles, total_distance_meters, activity_count')
-    .eq('user_id', userId)
-    .order('year_start', { ascending: true });
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getWeeklySportBreakdown(supabase: Supabase, userId: string, weeksBack = 16) {
-  const { data, error } = await supabase
-    .from('weekly_sport_breakdown')
+    .from('monthly_activity_breakdown')
     .select(
-      'week_start, sport_type, total_moving_minutes, total_moving_seconds, total_distance_meters, activity_count'
+      'period_start, sport_type, total_moving_minutes, total_moving_seconds, total_distance_meters, total_distance_miles, activity_count'
     )
     .eq('user_id', userId)
-    .gte('week_start', dateStringWeeksAgo(weeksBack))
-    .order('week_start', { ascending: true });
+    .gte('period_start', dateStringMonthsAgo(monthsBack))
+    .order('period_start', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getYearlyActivityBreakdown(supabase: Supabase, userId: string) {
+  const { data, error } = await supabase
+    .from('yearly_activity_breakdown')
+    .select(
+      'period_start, sport_type, total_moving_minutes, total_moving_seconds, total_distance_meters, total_distance_miles, activity_count'
+    )
+    .eq('user_id', userId)
+    .order('period_start', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }

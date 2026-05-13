@@ -76,5 +76,7 @@ export function formatSportType(sportType: string | null | undefined): string {
     Yoga: 'Yoga',
     Workout: 'Workout'
   };
-  return map[sportType] ?? sportType;
+  if (map[sportType]) return map[sportType];
+  // Humanize unknown Strava types that come through as camel-cased values.
+  return sportType.replace(/([a-z])([A-Z])/g, '$1 $2');
 }

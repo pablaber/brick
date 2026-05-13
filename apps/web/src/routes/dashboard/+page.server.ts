@@ -2,38 +2,44 @@ import { requireUser } from '$lib/server/auth';
 import {
   getActivityCount,
   getLatestSyncRun,
-  getMonthlyDistanceBySport,
+  getMonthlyActivityBreakdown,
   getRecentActivities,
   getStravaConnectionStatus,
-  getWeeklyActivityMinutes,
-  getWeeklySportBreakdown,
-  getYearlyRunningDistance
+  getTrainingDurationActivities,
+  getWeeklyActivityBreakdown,
+  getYearlyActivityBreakdown
 } from '$lib/server/dashboard';
+import { loadUserSettings } from '$lib/server/user-settings';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
   const user = await requireUser(event);
   const supabase = event.locals.supabase;
   const userId = user.id;
+  const now = new Date();
+  const currentYearNumber = now.getUTCFullYear();
+  const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
   const [
     connectionResult,
     syncRunResult,
     recentActivitiesResult,
-    weeklyMinutesResult,
-    monthlyDistanceResult,
-    yearlyDistanceResult,
-    weeklySportBreakdownResult,
-    activityCountResult
+    trainingDurationActivitiesResult,
+    weeklyBreakdownResult,
+    monthlyBreakdownResult,
+    yearlyBreakdownResult,
+    activityCountResult,
+    settingsResult
   ] = await Promise.allSettled([
     getStravaConnectionStatus(supabase, userId),
     getLatestSyncRun(supabase, userId),
     getRecentActivities(supabase, userId),
-    getWeeklyActivityMinutes(supabase, userId),
-    getMonthlyDistanceBySport(supabase, userId),
-    getYearlyRunningDistance(supabase, userId),
-    getWeeklySportBreakdown(supabase, userId, 53),
-    getActivityCount(supabase, userId)
+    getTrainingDurationActivities(supabase, userId),
+    getWeeklyActivityBreakdown(supabase, userId, 53),
+    getMonthlyActivityBreakdown(supabase, userId, 12),
+    getYearlyActivityBreakdown(supabase, userId),
+    getActivityCount(supabase, userId),
+    loadUserSettings(supabase, userId)
   ]);
 
   const connection =
@@ -44,23 +50,30 @@ export const load: PageServerLoad = async (event) => {
   const latestSyncRun = syncRunResult.status === 'fulfilled' ? syncRunResult.value : null;
   const recentActivities =
     recentActivitiesResult.status === 'fulfilled' ? recentActivitiesResult.value : [];
-  const weeklyActivityMinutes =
-    weeklyMinutesResult.status === 'fulfilled' ? weeklyMinutesResult.value : [];
-  const monthlyDistanceBySport =
-    monthlyDistanceResult.status === 'fulfilled' ? monthlyDistanceResult.value : [];
-  const yearlyRunningDistance =
-    yearlyDistanceResult.status === 'fulfilled' ? yearlyDistanceResult.value : [];
-  const weeklySportBreakdown =
-    weeklySportBreakdownResult.status === 'fulfilled' ? weeklySportBreakdownResult.value : [];
+  const trainingDurationActivities =
+    trainingDurationActivitiesResult.status === 'fulfilled'
+      ? trainingDurationActivitiesResult.value
+      : [];
+  const weeklyActivityBreakdown =
+    weeklyBreakdownResult.status === 'fulfilled' ? weeklyBreakdownResult.value : [];
+  const monthlyActivityBreakdown =
+    monthlyBreakdownResult.status === 'fulfilled' ? monthlyBreakdownResult.value : [];
+  const yearlyActivityBreakdown =
+    yearlyBreakdownResult.status === 'fulfilled' ? yearlyBreakdownResult.value : [];
   const activityCount =
     activityCountResult.status === 'fulfilled' ? activityCountResult.value : null;
-
-  // Current year running miles
-  const currentYear = new Date().getFullYear().toString();
-  const currentYearRow = yearlyRunningDistance.find((row) =>
-    row.year_start?.startsWith(currentYear)
-  );
-  const currentYearRunningMiles = currentYearRow?.total_distance_miles ?? null;
+  const userSettings =
+    settingsResult.status === 'fulfilled'
+      ? settingsResult.value
+      : {
+          colors: {
+            running: '#F97316',
+            cycling: '#22C55E',
+            swimming: '#0EA5E9',
+            other: '#8B5CF6'
+          },
+          activeGoals: {}
+        };
 
   const runningSports = new Set(['Run', 'TrailRun', 'VirtualRun']);
   const cyclingSports = new Set([
@@ -72,59 +85,87 @@ export const load: PageServerLoad = async (event) => {
   ]);
   const swimmingSports = new Set(['Swim', 'OpenWaterSwimming']);
 
-  // Cumulative weekly miles for current year (running + cycling)
-  const metersToMiles = (m: number) => m * 0.000621371;
-  const weeklyRunningMilesMap = new Map<string, number>();
-  const weeklyCyclingMilesMap = new Map<string, number>();
-  for (const row of weeklySportBreakdown) {
-    if (!row.week_start?.startsWith(currentYear) || !row.total_distance_meters) continue;
-    const sport = row.sport_type ?? '';
-    const miles = metersToMiles(row.total_distance_meters);
-    if (runningSports.has(sport)) {
-      weeklyRunningMilesMap.set(
-        row.week_start,
-        (weeklyRunningMilesMap.get(row.week_start) ?? 0) + miles
-      );
-    } else if (cyclingSports.has(sport)) {
-      weeklyCyclingMilesMap.set(
-        row.week_start,
-        (weeklyCyclingMilesMap.get(row.week_start) ?? 0) + miles
-      );
-    }
+  const currentYear = currentYearNumber.toString();
+  const yearStartDate = `${currentYear}-01-01`;
+  const todayDate = todayUtc.toISOString().split('T')[0];
+
+  function sumDistanceMiles(
+    rows: { sport_type: string | null; total_distance_miles: number | null }[],
+    sports?: Set<string>
+  ): number {
+    return rows.reduce((sum, row) => {
+      if (sports && !sports.has(row.sport_type ?? '')) return sum;
+      return sum + (row.total_distance_miles ?? 0);
+    }, 0);
   }
 
-  function buildFullYearProgress(weekMap: Map<string, number>) {
-    const yearStart = new Date(`${currentYear}-01-01`);
-    const dow = yearStart.getDay();
-    const firstMonday = new Date(yearStart);
-    firstMonday.setDate(firstMonday.getDate() - ((dow + 6) % 7));
+  function buildYearProgress(sports: Set<string>) {
+    const monthlyMiles = new Map<string, number>();
+    for (const row of monthlyActivityBreakdown) {
+      if (
+        !row.period_start?.startsWith(currentYear) ||
+        !row.total_distance_miles ||
+        !sports.has(row.sport_type ?? '')
+      ) {
+        continue;
+      }
 
-    const now = new Date();
-    const points: { week: string; miles: number }[] = [];
+      monthlyMiles.set(
+        row.period_start,
+        (monthlyMiles.get(row.period_start) ?? 0) + row.total_distance_miles
+      );
+    }
+
+    const points: { date: string; miles: number }[] = [{ date: yearStartDate, miles: 0 }];
     let cumulative = 0;
-    const d = new Date(firstMonday);
+    for (const [periodStart, miles] of [...monthlyMiles.entries()].sort(([a], [b]) =>
+      a.localeCompare(b)
+    )) {
+      const monthDate = new Date(`${periodStart}T00:00:00Z`);
+      const isCurrentMonth =
+        monthDate.getUTCFullYear() === todayUtc.getUTCFullYear() &&
+        monthDate.getUTCMonth() === todayUtc.getUTCMonth();
 
-    while (d <= now) {
-      const weekStr = d.toISOString().split('T')[0];
-      cumulative += weekMap.get(weekStr) ?? 0;
-      points.push({ week: weekStr, miles: cumulative });
-      d.setDate(d.getDate() + 7);
+      // Hold the line flat until the month starts, then slope across the month.
+      if (points[points.length - 1]?.date !== periodStart) {
+        points.push({ date: periodStart, miles: cumulative });
+      }
+
+      cumulative += miles;
+      const pointDate = new Date(monthDate);
+      if (!isCurrentMonth) {
+        pointDate.setUTCMonth(pointDate.getUTCMonth() + 1);
+      }
+      const date = isCurrentMonth ? todayDate : pointDate.toISOString().split('T')[0];
+      points.push({ date, miles: cumulative });
+    }
+
+    if (points[points.length - 1]?.date !== todayDate) {
+      points.push({ date: todayDate, miles: cumulative });
     }
 
     return points;
   }
 
-  const runningProgress = buildFullYearProgress(weeklyRunningMilesMap);
-  const cyclingProgress = buildFullYearProgress(weeklyCyclingMilesMap);
-  const currentYearCyclingMiles =
-    cyclingProgress.length > 0 ? cyclingProgress[cyclingProgress.length - 1].miles : 0;
+  const runningProgress = buildYearProgress(runningSports);
+  const cyclingProgress = buildYearProgress(cyclingSports);
+  const swimmingProgress = buildYearProgress(swimmingSports);
+  const currentYearRows = yearlyActivityBreakdown.filter((row) =>
+    row.period_start?.startsWith(currentYear)
+  );
+  const currentYearRunningMiles = sumDistanceMiles(currentYearRows, runningSports);
+  const currentYearCyclingMiles = sumDistanceMiles(currentYearRows, cyclingSports);
+  const currentYearSwimmingMiles = sumDistanceMiles(currentYearRows, swimmingSports);
 
   // Weekly minutes: aggregate by week and sport category
   type WeekEntry = { running: number; cycling: number; swimming: number; other: number };
   const weekBreakdown = new Map<string, WeekEntry>();
-  for (const row of weeklyActivityMinutes) {
-    if (row.week_start && row.total_moving_minutes) {
-      const entry = weekBreakdown.get(row.week_start) ?? {
+  const sixteenWeeksAgo = new Date(todayUtc);
+  sixteenWeeksAgo.setUTCDate(sixteenWeeksAgo.getUTCDate() - 16 * 7);
+  const sixteenWeeksAgoStr = sixteenWeeksAgo.toISOString().split('T')[0];
+  for (const row of weeklyActivityBreakdown) {
+    if (row.period_start && row.total_moving_minutes && row.period_start >= sixteenWeeksAgoStr) {
+      const entry = weekBreakdown.get(row.period_start) ?? {
         running: 0,
         cycling: 0,
         swimming: 0,
@@ -140,7 +181,7 @@ export const load: PageServerLoad = async (event) => {
       } else {
         entry.other += row.total_moving_minutes;
       }
-      weekBreakdown.set(row.week_start, entry);
+      weekBreakdown.set(row.period_start, entry);
     }
   }
   const sortedWeeks = [...weekBreakdown.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -160,11 +201,11 @@ export const load: PageServerLoad = async (event) => {
   }));
 
   const monthMap = new Map<string, number>();
-  for (const row of monthlyDistanceBySport) {
-    if (row.month_start && row.total_distance_miles) {
+  for (const row of monthlyActivityBreakdown) {
+    if (row.period_start && row.total_distance_miles) {
       monthMap.set(
-        row.month_start,
-        (monthMap.get(row.month_start) ?? 0) + row.total_distance_miles
+        row.period_start,
+        (monthMap.get(row.period_start) ?? 0) + row.total_distance_miles
       );
     }
   }
@@ -172,22 +213,26 @@ export const load: PageServerLoad = async (event) => {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, miles]) => ({ month, miles }));
 
-  const yearlyDistanceChart = yearlyRunningDistance.map((row) => ({
-    year: row.year_start ?? '',
-    miles: row.total_distance_miles ?? 0
-  }));
+  const yearMap = new Map<string, number>();
+  for (const row of yearlyActivityBreakdown) {
+    if (row.period_start && row.total_distance_miles) {
+      yearMap.set(
+        row.period_start,
+        (yearMap.get(row.period_start) ?? 0) + row.total_distance_miles
+      );
+    }
+  }
+  const yearlyDistanceChart = [...yearMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([year, miles]) => ({ year, miles }));
 
-  // Sport breakdown aggregate across recent 16 weeks
-  const sixteenWeeksAgo = new Date();
-  sixteenWeeksAgo.setDate(sixteenWeeksAgo.getDate() - 16 * 7);
-  const sixteenWeeksAgoStr = sixteenWeeksAgo.toISOString().split('T')[0];
+  // Sport breakdown aggregate across recent 1 year
   const sportTotals = new Map<string, number>();
-  for (const row of weeklySportBreakdown) {
-    if (
-      row.sport_type &&
-      row.total_moving_minutes &&
-      (row.week_start ?? '') >= sixteenWeeksAgoStr
-    ) {
+  const oneYearAgo = new Date(todayUtc);
+  oneYearAgo.setUTCFullYear(oneYearAgo.getUTCFullYear() - 1);
+  const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
+  for (const row of weeklyActivityBreakdown) {
+    if (row.sport_type && row.total_moving_minutes && (row.period_start ?? '') >= oneYearAgoStr) {
       sportTotals.set(
         row.sport_type,
         (sportTotals.get(row.sport_type) ?? 0) + row.total_moving_minutes
@@ -203,23 +248,63 @@ export const load: PageServerLoad = async (event) => {
     }))
     .sort((a, b) => b.minutes - a.minutes);
 
+  const yearlyRunningGoal = userSettings.activeGoals.yearly_running_distance;
+  const yearlyCyclingGoal = userSettings.activeGoals.yearly_cycling_distance;
+  const yearlySwimmingGoal = userSettings.activeGoals.yearly_swimming_distance;
+  const weeklyWorkoutGoal = userSettings.activeGoals.weekly_workout_minutes;
+
+  const runningCurrent = currentYearRunningMiles ?? 0;
+  const cyclingCurrent = currentYearCyclingMiles ?? 0;
+  const swimmingCurrent = currentYearSwimmingMiles ?? 0;
+  const weeklyCurrent = thisWeekWorkoutMinutes ?? 0;
+
+  function buildGoalSummary(
+    goal: typeof yearlyRunningGoal | typeof yearlyCyclingGoal | typeof yearlySwimmingGoal,
+    current: number
+  ) {
+    if (!goal) return null;
+    return {
+      target: goal.targetValue,
+      current,
+      unit: goal.unit,
+      pct: Math.round((current / goal.targetValue) * 100)
+    };
+  }
+
   return {
     connection,
     latestSyncRun,
     stats: {
       currentYearRunningMiles,
       currentYearCyclingMiles,
+      currentYearSwimmingMiles,
       thisWeekWorkoutMinutes,
-      syncedActivityCount: activityCount
+      syncedActivityCount: activityCount,
+      goals: {
+        yearlyRunningDistance: buildGoalSummary(yearlyRunningGoal, runningCurrent),
+        yearlyCyclingDistance: buildGoalSummary(yearlyCyclingGoal, cyclingCurrent),
+        yearlySwimmingDistance: buildGoalSummary(yearlySwimmingGoal, swimmingCurrent),
+        weeklyWorkoutMinutes: weeklyWorkoutGoal
+          ? {
+              target: weeklyWorkoutGoal.targetValue,
+              current: weeklyCurrent,
+              unit: weeklyWorkoutGoal.unit,
+              pct: Math.round((weeklyCurrent / weeklyWorkoutGoal.targetValue) * 100)
+            }
+          : null
+      }
     },
+    categoryColors: userSettings.colors,
     charts: {
       weeklyMinutes: weeklyMinutesChart,
       monthlyDistance: monthlyDistanceChart,
       yearlyDistance: yearlyDistanceChart,
       sportBreakdown: sportBreakdownChart,
       runningProgress,
-      cyclingProgress
+      cyclingProgress,
+      swimmingProgress
     },
-    recentActivities
+    recentActivities,
+    trainingDurationActivities
   };
 };

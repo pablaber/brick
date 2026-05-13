@@ -6,6 +6,13 @@
 	let { children } = $props();
 
 	const user = $derived(page.data.user);
+	const pageTitle = $derived.by(() => {
+		const routeId = page.route.id;
+		if (routeId === '/dashboard') return 'Brick | Dashboard';
+		if (routeId === '/auth/login') return 'Brick | Login';
+		if (routeId === '/settings') return 'Brick | Settings';
+		return 'Brick';
+	});
 
 	const isActive = (href: string) => {
 		if (href === '/') return page.url.pathname === '/';
@@ -17,7 +24,7 @@
 	<link rel="icon" type="image/png" sizes="16x16" href={`${base}/logos/brick-16.png`} />
 	<link rel="icon" type="image/png" sizes="32x32" href={`${base}/logos/brick-32.png`} />
 	<link rel="apple-touch-icon" sizes="180x180" href={`${base}/logos/brick-180.png`} />
-	<title>Workout Dashboard</title>
+	<title>{pageTitle}</title>
 </svelte:head>
 
 <div class="app-shell">
