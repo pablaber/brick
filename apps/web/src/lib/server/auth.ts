@@ -1,4 +1,4 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { getAdminSupabaseClient } from './supabase-admin';
 
@@ -23,7 +23,7 @@ export async function requireAdmin(event: RequestEvent) {
     .single();
 
   if (!profile?.is_admin) {
-    error(403, 'Forbidden');
+    redirect(303, '/dashboard');
   }
 
   return { user, serviceClient };
