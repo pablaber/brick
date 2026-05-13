@@ -5,19 +5,24 @@ ALTER TABLE public.profiles ADD COLUMN is_admin boolean NOT NULL DEFAULT false;
 CREATE OR REPLACE FUNCTION public.protect_is_admin()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
 BEGIN
-  IF NEW.is_admin IS DISTINCT FROM OLD.is_admin AND current_user = 'authenticated' THEN
+  IF auth.role() = 'authenticated' AND TG_OP = 'INSERT' AND COALESCE(NEW.is_admin, false) THEN
     RAISE EXCEPTION 'is_admin cannot be modified directly';
   END IF;
+
+  IF auth.role() = 'authenticated' AND TG_OP = 'UPDATE' AND NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+    RAISE EXCEPTION 'is_admin cannot be modified directly';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
 
 CREATE TRIGGER protect_is_admin_trigger
-  BEFORE UPDATE ON public.profiles
+  BEFORE INSERT OR UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.protect_is_admin();
 
