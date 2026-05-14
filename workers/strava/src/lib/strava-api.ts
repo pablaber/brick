@@ -1,4 +1,5 @@
 import type { StravaSummaryActivity } from '@brick/shared';
+import type { Logger } from 'pino';
 
 const STRAVA_ACTIVITIES_URL = 'https://www.strava.com/api/v3/athlete/activities';
 const STRAVA_ACTIVITY_BASE_URL = 'https://www.strava.com/api/v3/activities';
@@ -11,18 +12,21 @@ export type FetchStravaActivitiesOptions = {
   perPage?: number;
   maxPages?: number;
   fetchImpl?: typeof fetch;
+  logger?: Logger;
 };
 
 export type FetchStravaActivityTotalCountOptions = {
   accessToken: string;
   athleteId: number;
   fetchImpl?: typeof fetch;
+  logger?: Logger;
 };
 
 export type FetchStravaActivityByIdOptions = {
   accessToken: string;
   activityId: number;
   fetchImpl?: typeof fetch;
+  logger?: Logger;
 };
 
 export class StravaApiStatusError extends Error {
@@ -40,12 +44,24 @@ export async function fetchStravaActivities({
   before,
   perPage = 100,
   maxPages = 10,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  logger
 }: FetchStravaActivitiesOptions): Promise<StravaSummaryActivity[]> {
   const activities: StravaSummaryActivity[] = [];
+  const log = logger?.child({ methodName: 'fetchStravaActivities' }) ?? logger;
 
   for (let page = 1; page <= maxPages; page += 1) {
     const url = buildStravaActivitiesUrl({ page, perPage, after, before });
+    log?.debug(
+      {
+        url,
+        page,
+        perPage,
+        after: after ?? null,
+        before: before ?? null
+      },
+      'Requesting Strava activities page.'
+    );
 
     const response = await fetchImpl(url, {
       method: 'GET',
@@ -53,8 +69,27 @@ export async function fetchStravaActivities({
         authorization: `Bearer ${accessToken}`
       }
     });
+    log?.debug(
+      {
+        page,
+        status: response.status,
+        ok: response.ok,
+        rateLimitLimit: response.headers.get('x-ratelimit-limit'),
+        rateLimitUsage: response.headers.get('x-ratelimit-usage')
+      },
+      'Received Strava activities response.'
+    );
 
     if (!response.ok) {
+      const responseBody = await readResponseBodySnippet(response);
+      log?.warn(
+        {
+          page,
+          status: response.status,
+          responseBody
+        },
+        'Strava activities request failed.'
+      );
       throw new Error('Unable to fetch Strava activities.');
     }
 
@@ -74,11 +109,18 @@ export async function fetchStravaActivities({
 export async function fetchStravaActivityTotalCount({
   accessToken,
   athleteId,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  logger
 }: FetchStravaActivityTotalCountOptions): Promise<number | null> {
   if (!Number.isSafeInteger(athleteId) || athleteId <= 0) {
     return null;
   }
+  const log =
+    logger?.child({
+      methodName: 'fetchStravaActivityTotalCount',
+      athleteId
+    }) ?? logger;
+  log?.debug('Requesting Strava athlete stats for activity total count.');
 
   const response = await fetchImpl(`${STRAVA_ATHLETE_STATS_BASE_URL}/${athleteId}/stats`, {
     method: 'GET',
@@ -86,8 +128,25 @@ export async function fetchStravaActivityTotalCount({
       authorization: `Bearer ${accessToken}`
     }
   });
+  log?.debug(
+    {
+      status: response.status,
+      ok: response.ok,
+      rateLimitLimit: response.headers.get('x-ratelimit-limit'),
+      rateLimitUsage: response.headers.get('x-ratelimit-usage')
+    },
+    'Received Strava athlete stats response.'
+  );
 
   if (!response.ok) {
+    const responseBody = await readResponseBodySnippet(response);
+    log?.warn(
+      {
+        status: response.status,
+        responseBody
+      },
+      'Failed to fetch Strava athlete stats.'
+    );
     return null;
   }
 
@@ -98,11 +157,14 @@ export async function fetchStravaActivityTotalCount({
 export async function fetchStravaActivityById({
   accessToken,
   activityId,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  logger
 }: FetchStravaActivityByIdOptions): Promise<StravaSummaryActivity> {
   if (!Number.isSafeInteger(activityId) || activityId <= 0) {
     throw new Error('Activity id must be a positive safe integer.');
   }
+  const log = logger?.child({ methodName: 'fetchStravaActivityById', activityId }) ?? logger;
+  log?.debug('Requesting Strava activity by id.');
 
   const response = await fetchImpl(`${STRAVA_ACTIVITY_BASE_URL}/${activityId}`, {
     method: 'GET',
@@ -110,8 +172,25 @@ export async function fetchStravaActivityById({
       authorization: `Bearer ${accessToken}`
     }
   });
+  log?.debug(
+    {
+      status: response.status,
+      ok: response.ok,
+      rateLimitLimit: response.headers.get('x-ratelimit-limit'),
+      rateLimitUsage: response.headers.get('x-ratelimit-usage')
+    },
+    'Received Strava activity by id response.'
+  );
 
   if (!response.ok) {
+    const responseBody = await readResponseBodySnippet(response);
+    log?.warn(
+      {
+        status: response.status,
+        responseBody
+      },
+      'Failed to fetch Strava activity by id.'
+    );
     if (response.status === 401) {
       throw new StravaApiStatusError(401, 'Strava access token is unauthorized.');
     }
@@ -210,4 +289,20 @@ function normalizeCount(value: unknown): number {
   }
 
   return Math.floor(value);
+}
+
+async function readResponseBodySnippet(
+  response: Response,
+  maxLength = 1_000
+): Promise<string | null> {
+  try {
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...[truncated]` : text;
+  } catch {
+    return null;
+  }
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@brick/shared';
+import type { Logger } from 'pino';
 
 import type { Env } from '../env.js';
 import { normalizeStravaTokenResponse } from './strava-oauth.js';
@@ -10,10 +11,11 @@ const EXPIRING_SOON_WINDOW_MS = 5 * 60 * 1000;
 type StravaConnectionRow = Database['public']['Tables']['strava_connections']['Row'];
 
 type RefreshStravaTokenOptions = {
-  env: Pick<Env, 'STRAVA_CLIENT_ID' | 'STRAVA_CLIENT_SECRET'>;
+  env: Pick<Env, 'STRAVA_CLIENT_ID' | 'STRAVA_CLIENT_SECRET' | 'LOG_LEVEL'>;
   supabase: SupabaseClient<Database>;
   connection: StravaConnectionRow;
   fetchImpl?: typeof fetch;
+  logger?: Logger;
 };
 
 export function isTokenExpiredOrExpiringSoon(expiresAt: string, nowMs = Date.now()) {
@@ -30,11 +32,18 @@ export async function refreshStravaToken({
   env,
   supabase,
   connection,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  logger
 }: RefreshStravaTokenOptions): Promise<StravaConnectionRow> {
+  const log =
+    logger?.child({
+      methodName: 'refreshStravaToken',
+      userId: connection.user_id
+    }) ?? logger;
   if (!connection.refresh_token) {
     throw new Error('Unable to refresh Strava token without a refresh token.');
   }
+  log?.debug('Requesting Strava token refresh.');
 
   const response = await fetchImpl(STRAVA_TOKEN_URL, {
     method: 'POST',
@@ -48,8 +57,23 @@ export async function refreshStravaToken({
       refresh_token: connection.refresh_token
     }).toString()
   });
+  log?.debug(
+    {
+      status: response.status,
+      ok: response.ok
+    },
+    'Received Strava token refresh response.'
+  );
 
   if (!response.ok) {
+    const responseBody = await readResponseBodySnippet(response);
+    log?.warn(
+      {
+        status: response.status,
+        responseBody
+      },
+      'Strava token refresh failed.'
+    );
     throw new Error('Unable to refresh Strava token.');
   }
 
@@ -82,4 +106,20 @@ export async function refreshStravaToken({
     scope: refreshedToken.scope ?? connection.scope,
     updated_at: nowIso
   };
+}
+
+async function readResponseBodySnippet(
+  response: Response,
+  maxLength = 1_000
+): Promise<string | null> {
+  try {
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...[truncated]` : text;
+  } catch {
+    return null;
+  }
 }

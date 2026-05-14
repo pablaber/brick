@@ -52,7 +52,10 @@ function getLogger(env: Pick<Env, 'LOG_LEVEL'>): Logger {
     cachedLogger = pino({
       level,
       base: undefined,
-      timestamp: pino.stdTimeFunctions.isoTime
+      timestamp: pino.stdTimeFunctions.isoTime,
+      browser: {
+        asObject: true
+      }
     });
     cachedLevel = level;
   }

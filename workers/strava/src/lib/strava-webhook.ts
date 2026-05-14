@@ -220,7 +220,8 @@ export async function processStravaWebhookEvent({
       activeConnection = await refreshStravaToken({
         env,
         supabase,
-        connection
+        connection,
+        logger: log
       });
     }
 
@@ -232,7 +233,8 @@ export async function processStravaWebhookEvent({
     try {
       const activity = await fetchStravaActivityById({
         accessToken,
-        activityId: event.object_id
+        activityId: event.object_id,
+        logger: log
       });
 
       const mappedRow = mapStravaActivityToActivityRow(activity, activeConnection.user_id);

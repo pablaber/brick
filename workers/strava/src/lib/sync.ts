@@ -4,6 +4,7 @@ import type { Database } from '@brick/shared';
 
 import type { Env } from '../env.js';
 import { fetchStravaActivities, fetchStravaActivityTotalCount } from './strava-api.js';
+import { createLogger } from './logger.js';
 import { createServiceSupabaseClient } from './supabase.js';
 import { isTokenExpiredOrExpiringSoon, refreshStravaToken } from './strava-token.js';
 
@@ -56,6 +57,15 @@ export type SyncUserActivitiesResult = {
 export async function syncUserActivities(
   options: SyncUserActivitiesOptions
 ): Promise<SyncUserActivitiesResult> {
+  const log = createLogger({
+    env: options.env,
+    values: {
+      methodName: 'syncUserActivities',
+      userId: options.userId,
+      syncType: options.syncType,
+      triggeredBy: options.triggeredBy
+    }
+  });
   const supabase = options.supabase ?? createServiceSupabaseClient(options.env);
   const now = options.now ?? new Date();
   const nowIso = now.toISOString();
@@ -135,7 +145,8 @@ export async function syncUserActivities(
       activeConnection = await refreshStravaToken({
         env: options.env,
         supabase,
-        connection
+        connection,
+        logger: log
       });
     }
 
@@ -160,7 +171,8 @@ export async function syncUserActivities(
       after,
       before,
       perPage: INITIAL_SYNC_PER_PAGE,
-      maxPages: INITIAL_SYNC_MAX_PAGES
+      maxPages: INITIAL_SYNC_MAX_PAGES,
+      logger: log
     });
 
     const mappedActivities = activities.map((activity) =>
@@ -187,7 +199,8 @@ export async function syncUserActivities(
       estimatedTotalFromClient ??
       (await fetchStravaActivityTotalCount({
         accessToken,
-        athleteId: activeConnection.strava_athlete_id
+        athleteId: activeConnection.strava_athlete_id,
+        logger: log
       }));
 
     const { error: runningUpdateError } = await supabase
@@ -275,6 +288,17 @@ export async function syncUserActivities(
   } catch (error) {
     const statusCode = error instanceof SyncError ? error.statusCode : 500;
     const safeErrorMessage = error instanceof SyncError ? error.message : 'Sync failed.';
+    log.error(
+      {
+        err: error,
+        statusCode,
+        safeErrorMessage,
+        syncRunId: activeSyncRun?.id ?? null,
+        cursorBefore: normalizedCursorBefore,
+        estimatedTotalFromClient
+      },
+      'syncUserActivities failed.'
+    );
 
     if (activeSyncRun) {
       await supabase
