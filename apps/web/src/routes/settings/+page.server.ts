@@ -31,9 +31,13 @@ export const load: PageServerLoad = async (event) => {
 
   const { data: stravaConnection } = await event.locals.supabase
     .from('strava_connections')
-    .select('strava_athlete_id,scope,last_synced_at,created_at,updated_at')
+    .select(
+      'strava_athlete_id,scope,last_synced_at,webhook_events_received_at,last_webhook_event_at,deauthorized_at,created_at,updated_at'
+    )
     .eq('user_id', user.id)
     .maybeSingle();
+
+  const hasActiveStravaConnection = Boolean(stravaConnection && !stravaConnection.deauthorized_at);
 
   const { data: latestSyncRun } = await event.locals.supabase
     .from('sync_runs')
@@ -84,10 +88,13 @@ export const load: PageServerLoad = async (event) => {
     },
     strava: stravaConnection
       ? {
-          connected: true,
+          connected: hasActiveStravaConnection,
           strava_athlete_id: stravaConnection.strava_athlete_id,
           scope: stravaConnection.scope,
           last_synced_at: stravaConnection.last_synced_at,
+          webhook_events_received_at: stravaConnection.webhook_events_received_at,
+          last_webhook_event_at: stravaConnection.last_webhook_event_at,
+          deauthorized_at: stravaConnection.deauthorized_at,
           created_at: stravaConnection.created_at,
           updated_at: stravaConnection.updated_at
         }
@@ -96,6 +103,9 @@ export const load: PageServerLoad = async (event) => {
           strava_athlete_id: null,
           scope: null,
           last_synced_at: null,
+          webhook_events_received_at: null,
+          last_webhook_event_at: null,
+          deauthorized_at: null,
           created_at: null,
           updated_at: null
         },

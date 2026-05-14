@@ -8,6 +8,12 @@ STRAVA_CLIENT_ID=
 STRAVA_CLIENT_SECRET=
 # Redirect URI registered in the Strava app for OAuth callbacks.
 STRAVA_REDIRECT_URI=http://localhost:8787/strava/callback
+# Verify token used by Strava when validating GET /strava/webhook callback ownership.
+STRAVA_WEBHOOK_VERIFY_TOKEN=
+# Shared signing secret used to validate X-Strava-Signature for POST /strava/webhook.
+STRAVA_WEBHOOK_SIGNING_SECRET=
+# Optional canonical callback URL used by webhook subscription helper scripts.
+STRAVA_WEBHOOK_CALLBACK_URL=
 # Base URL of the web app for post-auth redirects.
 APP_URL=http://localhost:5173
 # Shared signing secret between web app and worker for secure internal tokens.

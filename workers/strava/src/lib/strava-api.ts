@@ -1,6 +1,7 @@
 import type { StravaSummaryActivity } from '@brick/shared';
 
 const STRAVA_ACTIVITIES_URL = 'https://www.strava.com/api/v3/athlete/activities';
+const STRAVA_ACTIVITY_BASE_URL = 'https://www.strava.com/api/v3/activities';
 const STRAVA_ATHLETE_STATS_BASE_URL = 'https://www.strava.com/api/v3/athletes';
 
 export type FetchStravaActivitiesOptions = {
@@ -17,6 +18,21 @@ export type FetchStravaActivityTotalCountOptions = {
   athleteId: number;
   fetchImpl?: typeof fetch;
 };
+
+export type FetchStravaActivityByIdOptions = {
+  accessToken: string;
+  activityId: number;
+  fetchImpl?: typeof fetch;
+};
+
+export class StravaApiStatusError extends Error {
+  constructor(
+    readonly statusCode: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
 
 export async function fetchStravaActivities({
   accessToken,
@@ -77,6 +93,49 @@ export async function fetchStravaActivityTotalCount({
 
   const raw = (await response.json()) as unknown;
   return normalizeActivityCountFromStats(raw);
+}
+
+export async function fetchStravaActivityById({
+  accessToken,
+  activityId,
+  fetchImpl = fetch
+}: FetchStravaActivityByIdOptions): Promise<StravaSummaryActivity> {
+  if (!Number.isSafeInteger(activityId) || activityId <= 0) {
+    throw new Error('Activity id must be a positive safe integer.');
+  }
+
+  const response = await fetchImpl(`${STRAVA_ACTIVITY_BASE_URL}/${activityId}`, {
+    method: 'GET',
+    headers: {
+      authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new StravaApiStatusError(401, 'Strava access token is unauthorized.');
+    }
+    if (response.status === 403) {
+      throw new StravaApiStatusError(403, 'Strava activity is not accessible.');
+    }
+    if (response.status === 404) {
+      throw new StravaApiStatusError(404, 'Strava activity was not found.');
+    }
+    if (response.status === 429) {
+      throw new StravaApiStatusError(429, 'Strava API rate limit exceeded.');
+    }
+
+    throw new StravaApiStatusError(response.status, 'Unable to fetch Strava activity.');
+  }
+
+  const raw = (await response.json()) as unknown;
+  const activity = normalizeStravaSummaryActivity(raw);
+
+  if (activity.id !== activityId) {
+    throw new Error('Invalid Strava activity payload id.');
+  }
+
+  return activity;
 }
 
 export function buildStravaActivitiesUrl({

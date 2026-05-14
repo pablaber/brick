@@ -86,7 +86,7 @@ export async function syncUserActivities(
     const { data: connection, error: connectionError } = await supabase
       .from('strava_connections')
       .select(
-        'user_id,strava_athlete_id,access_token,refresh_token,expires_at,scope,last_synced_at,created_at,updated_at'
+        'user_id,strava_athlete_id,access_token,refresh_token,expires_at,scope,deauthorized_at,last_synced_at,created_at,updated_at,webhook_events_received_at,last_webhook_event_at'
       )
       .eq('user_id', options.userId)
       .maybeSingle();
@@ -97,6 +97,15 @@ export async function syncUserActivities(
 
     if (!connection) {
       throw new SyncError('No Strava connection found', 400);
+    }
+
+    if (
+      connection.deauthorized_at ||
+      !connection.access_token ||
+      !connection.refresh_token ||
+      !connection.expires_at
+    ) {
+      throw new SyncError('No active Strava connection found', 400);
     }
 
     if (options.syncType === 'scheduled') {
@@ -130,6 +139,11 @@ export async function syncUserActivities(
       });
     }
 
+    const accessToken = activeConnection.access_token;
+    if (!accessToken) {
+      throw new SyncError('No active Strava connection found', 400);
+    }
+
     const after =
       normalizedCursorBefore === null && hasLastSyncedAt
         ? computeAfterUnixTimestamp(connection.last_synced_at)
@@ -142,7 +156,7 @@ export async function syncUserActivities(
           : undefined;
 
     const activities = await fetchStravaActivities({
-      accessToken: activeConnection.access_token,
+      accessToken,
       after,
       before,
       perPage: INITIAL_SYNC_PER_PAGE,
@@ -172,7 +186,7 @@ export async function syncUserActivities(
     const estimatedTotalActivities =
       estimatedTotalFromClient ??
       (await fetchStravaActivityTotalCount({
-        accessToken: activeConnection.access_token,
+        accessToken,
         athleteId: activeConnection.strava_athlete_id
       }));
 

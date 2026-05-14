@@ -455,6 +455,8 @@
 			<span class="card-heading-right">
 				{#if data.strava.connected}
 					<span class="status-bubble status-success heading-status">Connected</span>
+				{:else if data.strava.deauthorized_at}
+					<span class="status-bubble status-error heading-status">Deauthorized</span>
 				{/if}
 				<span class="chevron" class:chevron-open={stravaOpen}>&#9656;</span>
 			</span>
@@ -479,6 +481,17 @@
 				<li class="list-item">
 					<span>Scope</span>
 					<strong>{data.strava.scope ?? 'Not provided'}</strong>
+				</li>
+				<li class="list-item">
+					<span>Last Webhook Event</span>
+					{#if formatDate(data.strava.last_webhook_event_at)}
+						<span class="date-display">
+							<span class="date-label">{formatDate(data.strava.last_webhook_event_at)?.date}</span>
+							<span class="date-time">{formatDate(data.strava.last_webhook_event_at)?.time}</span>
+						</span>
+					{:else}
+						<strong>Never</strong>
+					{/if}
 				</li>
 				<li class="list-item">
 					<span>Last Sync Type</span>
@@ -615,9 +628,13 @@
 			</div>
 		{:else}
 			<div class="strava-disconnected">
-				<p class="metric-caption">Not connected yet</p>
+				<p class="metric-caption">{data.strava.deauthorized_at ? 'Access revoked' : 'Not connected yet'}</p>
 				<p class="metric-caption">
-					Connect Strava first. Manual sync is available once the account is connected.
+					{#if data.strava.deauthorized_at}
+						Strava access was revoked. Reconnect your account to resume syncs and webhook processing.
+					{:else}
+						Connect Strava first. Manual sync is available once the account is connected.
+					{/if}
 				</p>
 				<form method="POST" action={resolve('/strava/connect')}>
 					<button type="submit" class="strava-connect-button">

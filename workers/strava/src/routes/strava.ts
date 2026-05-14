@@ -116,6 +116,7 @@ stravaRoutes.get('/callback', async (c) => {
       refresh_token: tokenResponse.refresh_token,
       expires_at: new Date(tokenResponse.expires_at * 1000).toISOString(),
       scope: tokenResponse.scope ?? STRAVA_SCOPE,
+      deauthorized_at: null,
       updated_at: new Date().toISOString()
     },
     { onConflict: 'user_id' }

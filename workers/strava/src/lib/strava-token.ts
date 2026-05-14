@@ -32,6 +32,10 @@ export async function refreshStravaToken({
   connection,
   fetchImpl = fetch
 }: RefreshStravaTokenOptions): Promise<StravaConnectionRow> {
+  if (!connection.refresh_token) {
+    throw new Error('Unable to refresh Strava token without a refresh token.');
+  }
+
   const response = await fetchImpl(STRAVA_TOKEN_URL, {
     method: 'POST',
     headers: {

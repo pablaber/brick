@@ -41,7 +41,15 @@ This writes generated types to `packages/shared/src/database.types.ts`.
 - `public.strava_connections`: Strava OAuth/token metadata per user (readable by user, writable later via service role).
 - `public.oauth_states`: short-lived OAuth state records created/consumed by trusted server-side code.
 - `public.activities`: normalized synced Strava activities.
+- `public.strava_webhook_events`: persisted signed Strava webhook events and processing status.
 - `public.sync_runs`: history of manual/scheduled sync attempts.
+
+`public.strava_connections` also tracks webhook/deauthorization state:
+
+- `webhook_events_received_at`
+- `last_webhook_event_at`
+- `deauthorized_at`
+- nullable `access_token`, `refresh_token`, `expires_at` for retained deauthorized rows.
 
 ## View summary
 

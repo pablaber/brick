@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildStravaActivitiesUrl,
   fetchStravaActivities,
-  fetchStravaActivityTotalCount
+  fetchStravaActivityById,
+  fetchStravaActivityTotalCount,
+  StravaApiStatusError
 } from './strava-api.js';
 
 describe('buildStravaActivitiesUrl', () => {
@@ -136,5 +138,74 @@ describe('fetchStravaActivityTotalCount', () => {
     });
 
     expect(total).toBeNull();
+  });
+});
+
+describe('fetchStravaActivityById', () => {
+  it('calls the expected endpoint with bearer auth and returns activity', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://www.strava.com/api/v3/activities/456');
+      expect(init?.headers).toMatchObject({
+        authorization: 'Bearer token-1'
+      });
+
+      return new Response(JSON.stringify({ id: 456, name: 'Morning Run' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    });
+
+    const activity = await fetchStravaActivityById({
+      accessToken: 'token-1',
+      activityId: 456,
+      fetchImpl
+    });
+
+    expect(activity.id).toBe(456);
+    expect(activity.name).toBe('Morning Run');
+  });
+
+  it('throws for invalid payload ids', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: 0 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+    );
+
+    await expect(
+      fetchStravaActivityById({
+        accessToken: 'token-1',
+        activityId: 456,
+        fetchImpl
+      })
+    ).rejects.toThrow('Invalid Strava activity payload id.');
+  });
+
+  it('throws typed status errors for supported status codes', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: 'nope' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        })
+    );
+
+    await expect(
+      fetchStravaActivityById({
+        accessToken: 'token-1',
+        activityId: 456,
+        fetchImpl
+      })
+    ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
+
+    await expect(
+      fetchStravaActivityById({
+        accessToken: 'token-1',
+        activityId: 456,
+        fetchImpl
+      })
+    ).rejects.toBeInstanceOf(StravaApiStatusError);
   });
 });

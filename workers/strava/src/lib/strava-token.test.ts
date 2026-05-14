@@ -66,6 +66,9 @@ describe('refreshStravaToken', () => {
       expires_at: new Date(Date.now() - 1_000).toISOString(),
       scope: 'read',
       last_synced_at: null,
+      webhook_events_received_at: null,
+      last_webhook_event_at: null,
+      deauthorized_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };

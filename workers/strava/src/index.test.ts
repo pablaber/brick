@@ -82,6 +82,8 @@ const env = {
   STRAVA_CLIENT_ID: '12345',
   STRAVA_CLIENT_SECRET: 'strava-secret',
   STRAVA_REDIRECT_URI: 'http://localhost:8787/strava/callback',
+  STRAVA_WEBHOOK_VERIFY_TOKEN: 'verify-token',
+  STRAVA_WEBHOOK_SIGNING_SECRET: 'webhook-signing-secret',
   APP_URL: 'http://localhost:5173',
   WORKER_SHARED_SECRET: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 };
