@@ -80,6 +80,7 @@ const env: Env = {
   STRAVA_REDIRECT_URI: 'http://localhost:8787/strava/callback',
   STRAVA_WEBHOOK_VERIFY_TOKEN: 'verify-token',
   STRAVA_WEBHOOK_SIGNING_SECRET: 'signing-secret',
+  STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION: 'false',
   APP_URL: 'http://localhost:5173',
   WORKER_SHARED_SECRET: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 };
@@ -132,6 +133,29 @@ describe('strava webhook routes', () => {
     );
 
     expect(response.status).toBe(500);
+  });
+
+  it('POST /strava/webhook bypasses signature checks when disabled=true', async () => {
+    const signatureDisabledEnv = {
+      ...env,
+      STRAVA_WEBHOOK_SIGNING_SECRET: '',
+      STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION: 'true'
+    };
+    const waitUntil = vi.fn();
+    const response = await app.fetch(
+      new Request('http://localhost/strava/webhook', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(validPayload())
+      }),
+      signatureDisabledEnv,
+      { waitUntil } as unknown as ExecutionContext
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockState.insertedRows).toHaveLength(1);
+    expect(mockState.insertedRows[0]?.signature_header).toBe('DISABLED');
+    expect(waitUntil).toHaveBeenCalledTimes(1);
   });
 
   it('POST /strava/webhook rejects missing signature header', async () => {

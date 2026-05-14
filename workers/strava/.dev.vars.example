@@ -12,6 +12,9 @@ STRAVA_REDIRECT_URI=http://localhost:8787/strava/callback
 STRAVA_WEBHOOK_VERIFY_TOKEN=
 # Shared signing secret used to validate X-Strava-Signature for POST /strava/webhook.
 STRAVA_WEBHOOK_SIGNING_SECRET=
+# Optional local override. When set to true, signature verification is bypassed.
+# Do not enable in production.
+STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION=false
 # Optional canonical callback URL used by webhook subscription helper scripts.
 STRAVA_WEBHOOK_CALLBACK_URL=
 # Base URL of the web app for post-auth redirects.

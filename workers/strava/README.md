@@ -45,9 +45,8 @@ Strava callback verification endpoint.
 
 Signed webhook intake endpoint.
 
-- Requires `STRAVA_WEBHOOK_SIGNING_SECRET`.
-- Requires valid `X-Strava-Signature` (`t=...,v1=...`).
-- Rejects unsigned/invalid signature requests.
+- Requires `STRAVA_WEBHOOK_SIGNING_SECRET` and valid `X-Strava-Signature` by default.
+- If `STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION=true`, signature verification is bypassed.
 - Persists each valid event to `strava_webhook_events`.
 - Returns `200` quickly, then processes async with `waitUntil()`.
 
@@ -74,6 +73,7 @@ Required:
 
 Optional:
 
+- `STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION` (`true` disables webhook signature checks; keep `false` in production)
 - `STRAVA_WEBHOOK_CALLBACK_URL` (used by subscription helper scripts)
 - `STRAVA_SCHEDULED_SYNC_MIN_INTERVAL_HOURS` (default `6`)
 - `STRAVA_SCHEDULED_SYNC_LIMIT` (default `25`)
@@ -139,6 +139,7 @@ Scheduled sync excludes deauthorized connections and rows with null token fields
 ## Troubleshooting
 
 - `401` on webhook POST: missing/invalid `X-Strava-Signature`, timestamp out of range, or wrong signing secret.
+- Signature checks disabled: ensure `STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION` is set only for temporary/local fallback.
 - `403` on webhook GET verify: incorrect `hub.verify_token`.
 - Webhook event stays `failed`: inspect `strava_webhook_events.processing_error` and worker logs.
 - `sync=not_connected`: no active Strava connection or connection is deauthorized.

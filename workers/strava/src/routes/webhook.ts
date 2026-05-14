@@ -36,25 +36,31 @@ webhookRoutes.get('/webhook', async (c) => {
 });
 
 webhookRoutes.post('/webhook', async (c) => {
+  const disableSignatureVerification =
+    c.env.STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION?.trim().toLowerCase() === 'true';
   const signingSecret = c.env.STRAVA_WEBHOOK_SIGNING_SECRET?.trim();
-  if (!signingSecret) {
-    return c.json({ ok: false, error: 'Webhook signing secret is not configured.' }, 500);
-  }
-
   const signatureHeader = c.req.header('x-strava-signature');
-  if (!signatureHeader) {
-    return c.json({ ok: false, error: 'Missing X-Strava-Signature header.' }, 401);
-  }
 
   const rawBody = await c.req.raw.text();
-  const isValidSignature = await verifyStravaWebhookSignature({
-    signatureHeader,
-    rawBody,
-    signingSecret
-  });
 
-  if (!isValidSignature) {
-    return c.json({ ok: false, error: 'Invalid X-Strava-Signature header.' }, 401);
+  if (!disableSignatureVerification) {
+    if (!signingSecret) {
+      return c.json({ ok: false, error: 'Webhook signing secret is not configured.' }, 500);
+    }
+
+    if (!signatureHeader) {
+      return c.json({ ok: false, error: 'Missing X-Strava-Signature header.' }, 401);
+    }
+
+    const isValidSignature = await verifyStravaWebhookSignature({
+      signatureHeader,
+      rawBody,
+      signingSecret
+    });
+
+    if (!isValidSignature) {
+      return c.json({ ok: false, error: 'Invalid X-Strava-Signature header.' }, 401);
+    }
   }
 
   let rawJson: unknown;
@@ -107,7 +113,7 @@ webhookRoutes.post('/webhook', async (c) => {
     event_time: eventTimeIso,
     updates: event.updates as WebhookEventInsert['updates'],
     raw_json: rawJson as WebhookEventInsert['raw_json'],
-    signature_header: signatureHeader,
+    signature_header: signatureHeader ?? 'DISABLED',
     received_at: nowIso,
     processing_status: 'pending'
   };
