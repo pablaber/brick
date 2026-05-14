@@ -3,7 +3,6 @@ import type { Database } from '@brick/shared';
 import type { Logger } from 'pino';
 
 import type { Env } from '../env.js';
-import { normalizeStravaTokenResponse } from './strava-oauth.js';
 
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
 const EXPIRING_SOON_WINDOW_MS = 5 * 60 * 1000;
@@ -79,7 +78,20 @@ export async function refreshStravaToken({
 
   const raw = (await response.json()) as unknown;
 
-  const refreshedToken = normalizeStravaTokenResponse(raw);
+  const refreshedToken = normalizeStravaRefreshTokenResponse(raw);
+  if (
+    refreshedToken.athleteId !== null &&
+    refreshedToken.athleteId !== connection.strava_athlete_id
+  ) {
+    log?.error(
+      {
+        expectedAthleteId: connection.strava_athlete_id,
+        actualAthleteId: refreshedToken.athleteId
+      },
+      'Strava refresh token response athlete id mismatch.'
+    );
+    throw new Error('Refreshed token athlete mismatch.');
+  }
   const nowIso = new Date().toISOString();
   const expiresAtIso = new Date(refreshedToken.expires_at * 1000).toISOString();
 
@@ -106,6 +118,76 @@ export async function refreshStravaToken({
     scope: refreshedToken.scope ?? connection.scope,
     updated_at: nowIso
   };
+}
+
+type StravaRefreshTokenResponse = {
+  token_type: string;
+  expires_at: number;
+  expires_in: number;
+  refresh_token: string;
+  access_token: string;
+  scope?: string;
+  athleteId: number | null;
+};
+
+function normalizeStravaRefreshTokenResponse(raw: unknown): StravaRefreshTokenResponse {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid token response from Strava.');
+  }
+
+  const record = raw as Record<string, unknown>;
+  const tokenType = record.token_type;
+  const expiresAt = record.expires_at;
+  const expiresIn = record.expires_in;
+  const refreshToken = record.refresh_token;
+  const accessToken = record.access_token;
+  const scope = record.scope;
+  const athleteId = parseOptionalAthleteId(record.athlete);
+
+  if (typeof tokenType !== 'string') {
+    throw new Error('Invalid token_type in Strava response.');
+  }
+  if (typeof expiresAt !== 'number' || !Number.isInteger(expiresAt) || expiresAt <= 0) {
+    throw new Error('Invalid expires_at in Strava response.');
+  }
+  if (typeof expiresIn !== 'number' || !Number.isInteger(expiresIn) || expiresIn < 0) {
+    throw new Error('Invalid expires_in in Strava response.');
+  }
+  if (typeof refreshToken !== 'string' || refreshToken.length === 0) {
+    throw new Error('Invalid refresh_token in Strava response.');
+  }
+  if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    throw new Error('Invalid access_token in Strava response.');
+  }
+  if (scope !== undefined && typeof scope !== 'string') {
+    throw new Error('Invalid scope in Strava response.');
+  }
+
+  return {
+    token_type: tokenType,
+    expires_at: expiresAt,
+    expires_in: expiresIn,
+    refresh_token: refreshToken,
+    access_token: accessToken,
+    scope: scope as string | undefined,
+    athleteId
+  };
+}
+
+function parseOptionalAthleteId(rawAthlete: unknown): number | null {
+  if (!rawAthlete || typeof rawAthlete !== 'object') {
+    return null;
+  }
+
+  const athlete = rawAthlete as { id?: unknown };
+  if (athlete.id == null) {
+    return null;
+  }
+  if (typeof athlete.id === 'number' && Number.isSafeInteger(athlete.id) && athlete.id > 0) {
+    return athlete.id;
+  }
+
+  return null;
 }
 
 async function readResponseBodySnippet(
