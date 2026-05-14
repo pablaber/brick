@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { Logger } from 'pino';
 
 import {
   buildStravaActivitiesUrl,
@@ -7,6 +8,14 @@ import {
   fetchStravaActivityTotalCount,
   StravaApiStatusError
 } from './strava-api.js';
+
+const testLogger = {
+  debug: vi.fn(),
+  warn: vi.fn(),
+  child: vi.fn(function child() {
+    return testLogger;
+  })
+} as unknown as Logger;
 
 describe('buildStravaActivitiesUrl', () => {
   it('builds activities URL with pagination and time filters', () => {
@@ -53,7 +62,8 @@ describe('fetchStravaActivities', () => {
     const activities = await fetchStravaActivities({
       accessToken: 'token',
       fetchImpl,
-      maxPages: 10
+      maxPages: 10,
+      logger: testLogger
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
@@ -72,7 +82,8 @@ describe('fetchStravaActivities', () => {
     await fetchStravaActivities({
       accessToken: 'token',
       fetchImpl,
-      maxPages: 2
+      maxPages: 2,
+      logger: testLogger
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
@@ -90,7 +101,8 @@ describe('fetchStravaActivities', () => {
     await expect(
       fetchStravaActivities({
         accessToken: 'token',
-        fetchImpl
+        fetchImpl,
+        logger: testLogger
       })
     ).rejects.toThrow('Unable to fetch Strava activities.');
   });
@@ -116,7 +128,8 @@ describe('fetchStravaActivityTotalCount', () => {
     const total = await fetchStravaActivityTotalCount({
       accessToken: 'token',
       athleteId: 123,
-      fetchImpl
+      fetchImpl,
+      logger: testLogger
     });
 
     expect(total).toBe(205);
@@ -134,7 +147,8 @@ describe('fetchStravaActivityTotalCount', () => {
     const total = await fetchStravaActivityTotalCount({
       accessToken: 'token',
       athleteId: 123,
-      fetchImpl
+      fetchImpl,
+      logger: testLogger
     });
 
     expect(total).toBeNull();
@@ -158,7 +172,8 @@ describe('fetchStravaActivityById', () => {
     const activity = await fetchStravaActivityById({
       accessToken: 'token-1',
       activityId: 456,
-      fetchImpl
+      fetchImpl,
+      logger: testLogger
     });
 
     expect(activity.id).toBe(456);
@@ -178,7 +193,8 @@ describe('fetchStravaActivityById', () => {
       fetchStravaActivityById({
         accessToken: 'token-1',
         activityId: 456,
-        fetchImpl
+        fetchImpl,
+        logger: testLogger
       })
     ).rejects.toThrow('Invalid Strava activity payload id.');
   });
@@ -196,7 +212,8 @@ describe('fetchStravaActivityById', () => {
       fetchStravaActivityById({
         accessToken: 'token-1',
         activityId: 456,
-        fetchImpl
+        fetchImpl,
+        logger: testLogger
       })
     ).rejects.toEqual(expect.objectContaining({ statusCode: 404 }));
 
@@ -204,7 +221,8 @@ describe('fetchStravaActivityById', () => {
       fetchStravaActivityById({
         accessToken: 'token-1',
         activityId: 456,
-        fetchImpl
+        fetchImpl,
+        logger: testLogger
       })
     ).rejects.toBeInstanceOf(StravaApiStatusError);
   });

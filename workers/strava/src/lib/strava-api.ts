@@ -12,21 +12,21 @@ export type FetchStravaActivitiesOptions = {
   perPage?: number;
   maxPages?: number;
   fetchImpl?: typeof fetch;
-  logger?: Logger;
+  logger: Logger;
 };
 
 export type FetchStravaActivityTotalCountOptions = {
   accessToken: string;
   athleteId: number;
   fetchImpl?: typeof fetch;
-  logger?: Logger;
+  logger: Logger;
 };
 
 export type FetchStravaActivityByIdOptions = {
   accessToken: string;
   activityId: number;
   fetchImpl?: typeof fetch;
-  logger?: Logger;
+  logger: Logger;
 };
 
 export class StravaApiStatusError extends Error {
@@ -48,11 +48,11 @@ export async function fetchStravaActivities({
   logger
 }: FetchStravaActivitiesOptions): Promise<StravaSummaryActivity[]> {
   const activities: StravaSummaryActivity[] = [];
-  const log = logger?.child({ methodName: 'fetchStravaActivities' }) ?? logger;
+  const log = logger.child({ methodName: 'fetchStravaActivities' });
 
   for (let page = 1; page <= maxPages; page += 1) {
     const url = buildStravaActivitiesUrl({ page, perPage, after, before });
-    log?.debug(
+    log.debug(
       {
         url,
         page,
@@ -69,7 +69,7 @@ export async function fetchStravaActivities({
         authorization: `Bearer ${accessToken}`
       }
     });
-    log?.debug(
+    log.debug(
       {
         page,
         status: response.status,
@@ -82,7 +82,7 @@ export async function fetchStravaActivities({
 
     if (!response.ok) {
       const responseBody = await readResponseBodySnippet(response);
-      log?.warn(
+      log.warn(
         {
           page,
           status: response.status,
@@ -115,12 +115,11 @@ export async function fetchStravaActivityTotalCount({
   if (!Number.isSafeInteger(athleteId) || athleteId <= 0) {
     return null;
   }
-  const log =
-    logger?.child({
-      methodName: 'fetchStravaActivityTotalCount',
-      athleteId
-    }) ?? logger;
-  log?.debug('Requesting Strava athlete stats for activity total count.');
+  const log = logger.child({
+    methodName: 'fetchStravaActivityTotalCount',
+    athleteId
+  });
+  log.debug('Requesting Strava athlete stats for activity total count.');
 
   const response = await fetchImpl(`${STRAVA_ATHLETE_STATS_BASE_URL}/${athleteId}/stats`, {
     method: 'GET',
@@ -128,7 +127,7 @@ export async function fetchStravaActivityTotalCount({
       authorization: `Bearer ${accessToken}`
     }
   });
-  log?.debug(
+  log.debug(
     {
       status: response.status,
       ok: response.ok,
@@ -140,7 +139,7 @@ export async function fetchStravaActivityTotalCount({
 
   if (!response.ok) {
     const responseBody = await readResponseBodySnippet(response);
-    log?.warn(
+    log.warn(
       {
         status: response.status,
         responseBody
@@ -163,8 +162,8 @@ export async function fetchStravaActivityById({
   if (!Number.isSafeInteger(activityId) || activityId <= 0) {
     throw new Error('Activity id must be a positive safe integer.');
   }
-  const log = logger?.child({ methodName: 'fetchStravaActivityById', activityId }) ?? logger;
-  log?.debug('Requesting Strava activity by id.');
+  const log = logger.child({ methodName: 'fetchStravaActivityById', activityId });
+  log.debug('Requesting Strava activity by id.');
 
   const response = await fetchImpl(`${STRAVA_ACTIVITY_BASE_URL}/${activityId}`, {
     method: 'GET',
@@ -172,7 +171,7 @@ export async function fetchStravaActivityById({
       authorization: `Bearer ${accessToken}`
     }
   });
-  log?.debug(
+  log.debug(
     {
       status: response.status,
       ok: response.ok,
@@ -184,7 +183,7 @@ export async function fetchStravaActivityById({
 
   if (!response.ok) {
     const responseBody = await readResponseBodySnippet(response);
-    log?.warn(
+    log.warn(
       {
         status: response.status,
         responseBody
