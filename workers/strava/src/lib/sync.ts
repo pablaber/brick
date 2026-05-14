@@ -1,6 +1,7 @@
 import { mapStravaActivityToActivityRow } from '@brick/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@brick/shared';
+import type { Logger } from 'pino';
 
 import type { Env } from '../env.js';
 import { fetchStravaActivities, fetchStravaActivityTotalCount } from './strava-api.js';
@@ -28,6 +29,7 @@ export type SyncUserActivitiesOptions = {
   userId: string;
   syncType: SyncType;
   triggeredBy: SyncTrigger;
+  logger?: Logger;
   now?: Date;
   cursorBefore?: number | null;
   requestedSyncRunId?: string;
@@ -57,14 +59,16 @@ export type SyncUserActivitiesResult = {
 export async function syncUserActivities(
   options: SyncUserActivitiesOptions
 ): Promise<SyncUserActivitiesResult> {
-  const log = createLogger({
-    env: options.env,
-    values: {
-      methodName: 'syncUserActivities',
-      userId: options.userId,
-      syncType: options.syncType,
-      triggeredBy: options.triggeredBy
-    }
+  const baseLogger =
+    options.logger ??
+    createLogger({
+      env: options.env
+    });
+  const log = baseLogger.child({
+    methodName: 'syncUserActivities',
+    userId: options.userId,
+    syncType: options.syncType,
+    triggeredBy: options.triggeredBy
   });
   const supabase = options.supabase ?? createServiceSupabaseClient(options.env);
   const now = options.now ?? new Date();

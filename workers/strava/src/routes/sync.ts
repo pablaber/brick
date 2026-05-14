@@ -52,6 +52,7 @@ syncRoutes.post('/manual', async (c) => {
     userId: payload.userId,
     syncType: 'manual',
     triggeredBy: 'manual-route',
+    logger: log,
     cursorBefore: body?.cursorBefore,
     requestedSyncRunId: body?.syncRunId,
     estimatedTotalActivities: body?.estimatedTotalActivities

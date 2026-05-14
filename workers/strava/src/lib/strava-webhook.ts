@@ -1,5 +1,6 @@
 import { mapStravaActivityToActivityRow, type Database } from '@brick/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Logger } from 'pino';
 
 import type { Env } from '../env.js';
 import { createLogger } from './logger.js';
@@ -27,6 +28,7 @@ export type ProcessStravaWebhookEventOptions = {
   eventId: string;
   event: StravaWebhookEvent;
   userId: string | null;
+  logger?: Logger;
   now?: Date;
   supabase?: SupabaseClient<Database>;
 };
@@ -106,20 +108,23 @@ export async function processStravaWebhookEvent({
   eventId,
   event,
   userId,
+  logger,
   now = new Date(),
   supabase = createServiceSupabaseClient(env)
 }: ProcessStravaWebhookEventOptions): Promise<void> {
-  const log = createLogger({
-    env,
-    values: {
-      methodName: 'processStravaWebhookEvent',
-      eventId,
-      objectType: event.object_type,
-      objectId: event.object_id,
-      aspectType: event.aspect_type,
-      ownerId: event.owner_id,
-      userId
-    }
+  const baseLogger =
+    logger ??
+    createLogger({
+      env
+    });
+  const log = baseLogger.child({
+    methodName: 'processStravaWebhookEvent',
+    eventId,
+    objectType: event.object_type,
+    objectId: event.object_id,
+    aspectType: event.aspect_type,
+    ownerId: event.owner_id,
+    userId
   });
 
   try {

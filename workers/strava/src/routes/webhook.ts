@@ -189,7 +189,8 @@ webhookRoutes.post('/webhook', async (c) => {
       env: c.env,
       eventId: persistedEvent.id,
       event,
-      userId: connectionUserId
+      userId: connectionUserId,
+      logger: log
     })
   );
 
