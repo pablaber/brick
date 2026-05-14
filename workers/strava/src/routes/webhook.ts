@@ -148,7 +148,6 @@ webhookRoutes.post('/webhook', async (c) => {
         'Failed to update Strava connection webhook timestamps.',
         updateConnectionError
       );
-      return c.json({ ok: false, error: 'Unable to update webhook timestamps.' }, 500);
     }
   }
 
