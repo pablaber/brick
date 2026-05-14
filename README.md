@@ -5,7 +5,7 @@ This repository is a `pnpm` + Turborepo monorepo for the Brick tracking platform
 ## Architecture
 
 - `apps/web`: SvelteKit frontend dashboard with Supabase Auth.
-- `workers/strava`: Cloudflare Worker for Strava OAuth connection flow and manual activity sync.
+- `workers/strava`: Cloudflare Worker for Strava OAuth, manual/scheduled sync, and signed Strava webhook processing.
 - `packages/shared`: Shared TypeScript types and utilities (including generated database types).
 - `supabase/migrations`: SQL migrations for the Supabase schema.
 
@@ -114,6 +114,9 @@ STRAVA_CLIENT_SECRET=<strava-client-secret>
 STRAVA_REDIRECT_URI=http://localhost:8787/strava/callback
 APP_URL=http://localhost:5173
 WORKER_SHARED_SECRET=<long-random-secret>
+STRAVA_WEBHOOK_VERIFY_TOKEN=<random-verify-token>
+STRAVA_WEBHOOK_SIGNING_SECRET=<random-signing-secret>
+STRAVA_WEBHOOK_CALLBACK_URL=<public-https-url>/strava/webhook
 ```
 
 ### 3) Web env vars
@@ -130,6 +133,7 @@ WORKER_SHARED_SECRET=<must-match-worker-shared-secret>
 Important:
 
 - `SUPABASE_SECRET_KEY`, `STRAVA_CLIENT_SECRET`, and `WORKER_SHARED_SECRET` must never be in public/browser vars.
+- `STRAVA_WEBHOOK_SIGNING_SECRET` is required for webhook signature verification and must remain server-side.
 - `WORKER_SHARED_SECRET` must match between web server env and worker env.
 
 ### 4) Run local OAuth flow
@@ -221,6 +225,7 @@ Production deploys run via [`.github/workflows/deploy.yml`](.github/workflows/de
   - `PUBLIC_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}`
   - `STRAVA_WORKER_URL=https://api.getbricked.fit`
   - `STRAVA_REDIRECT_URI=https://api.getbricked.fit/strava/callback`
+  - `STRAVA_WEBHOOK_CALLBACK_URL=https://api.getbricked.fit/strava/webhook`
   - `APP_URL=https://getbricked.fit`
 
 ### GitHub configuration
@@ -234,12 +239,58 @@ Required secrets:
 - `SUPABASE_SECRET_KEY`
 - `STRAVA_CLIENT_SECRET`
 - `WORKER_SHARED_SECRET`
+- `STRAVA_WEBHOOK_VERIFY_TOKEN`
+- `STRAVA_WEBHOOK_SIGNING_SECRET`
 
 Required variables:
 
 - `SUPABASE_PROJECT_ID`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `STRAVA_CLIENT_ID`
+
+## Phase 11: Webhook Subscription Management
+
+Run from repo root:
+
+```bash
+export STRAVA_CLIENT_ID="<prod-client-id>"
+export STRAVA_CLIENT_SECRET="<prod-client-secret>"
+export STRAVA_WEBHOOK_CALLBACK_URL="https://api.getbricked.fit/strava/webhook"
+export STRAVA_WEBHOOK_VERIFY_TOKEN="<prod-verify-token>"
+
+pnpm --filter @brick/strava-worker webhook:view
+pnpm --filter @brick/strava-worker webhook:create
+pnpm --filter @brick/strava-worker webhook:delete -- <subscription-id>
+```
+
+Notes:
+
+- The subscription script requires env vars to be set in your shell; it does not load `workers/strava/.dev.vars`.
+- Strava allows one webhook subscription per app.
+- `webhook:create` checks for an existing subscription first.
+- Do not create subscriptions in deploy automation.
+
+### Local webhook testing
+
+- Strava requires a public HTTPS callback URL. Use a tunnel during local development.
+- Callback verification test:
+
+```bash
+curl "http://localhost:8787/strava/webhook?hub.mode=subscribe&hub.challenge=test&hub.verify_token=<verify-token>"
+```
+
+- Signed POST test (local worker):
+
+```bash
+BODY='{"aspect_type":"create","event_time":1716126040,"object_id":1360128428,"object_type":"activity","owner_id":134815,"subscription_id":120475}'
+TS=$(date +%s)
+SIG=$(printf '%s' "${TS}.${BODY}" | openssl dgst -sha256 -hmac "$STRAVA_WEBHOOK_SIGNING_SECRET" -hex | sed 's/^.* //')
+
+curl -i "http://localhost:8787/strava/webhook" \
+  -H "content-type: application/json" \
+  -H "X-Strava-Signature: t=${TS},v1=${SIG}" \
+  -d "$BODY"
+```
 
 ### First deploy smoke test checklist
 
@@ -254,6 +305,4 @@ Required variables:
 
 ## Current non-goals
 
-- No scheduled sync/Cron triggers yet.
-- No Strava webhooks yet.
 - Dashboard remains mock-data based in this phase.

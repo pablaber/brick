@@ -1,31 +1,31 @@
-import { dev } from '$app/environment';
-import { env } from '$env/dynamic/private';
 import pino, { type LevelWithSilent, type Logger } from 'pino';
 
-export const logger = pino({
-  level: resolveLogLevel(),
-  base: undefined,
-  timestamp: pino.stdTimeFunctions.isoTime,
-  browser: {
-    asObject: true,
-    write: {
-      trace: (obj) => console.debug(withCloudflareLevel(obj, 'debug')),
-      debug: (obj) => console.debug(withCloudflareLevel(obj, 'debug')),
-      info: (obj) => console.info(withCloudflareLevel(obj, 'info')),
-      warn: (obj) => console.warn(withCloudflareLevel(obj, 'warn')),
-      error: (obj) => console.error(withCloudflareLevel(obj, 'error')),
-      fatal: (obj) => console.error(withCloudflareLevel(obj, 'error'))
-    }
-  }
-});
+import type { Env } from '../env.js';
 
 type CreateRequestLoggerOptions = {
+  env: Pick<Env, 'LOG_LEVEL'>;
   request: Request;
   methodName: string;
   values?: Record<string, unknown>;
 };
+type CreateLoggerOptions = {
+  env: Pick<Env, 'LOG_LEVEL'>;
+  values?: Record<string, unknown>;
+};
+
+let cachedLogger: Logger | null = null;
+let cachedLevel: LevelWithSilent | null = null;
+
+export function createLogger({ env, values }: CreateLoggerOptions): Logger {
+  if (!values) {
+    return getLogger(env);
+  }
+
+  return getLogger(env).child(values);
+}
 
 export function createRequestLogger({
+  env,
   request,
   methodName,
   values
@@ -43,7 +43,32 @@ export function createRequestLogger({
     fields.requestId = requestId;
   }
 
-  return logger.child(fields);
+  return getLogger(env).child(fields);
+}
+
+function getLogger(env: Pick<Env, 'LOG_LEVEL'>): Logger {
+  const level = resolveLogLevel(env.LOG_LEVEL);
+  if (!cachedLogger || cachedLevel !== level) {
+    cachedLogger = pino({
+      level,
+      base: undefined,
+      timestamp: pino.stdTimeFunctions.isoTime,
+      browser: {
+        asObject: true,
+        write: {
+          trace: (obj) => console.debug(withCloudflareLevel(obj, 'debug')),
+          debug: (obj) => console.debug(withCloudflareLevel(obj, 'debug')),
+          info: (obj) => console.info(withCloudflareLevel(obj, 'info')),
+          warn: (obj) => console.warn(withCloudflareLevel(obj, 'warn')),
+          error: (obj) => console.error(withCloudflareLevel(obj, 'error')),
+          fatal: (obj) => console.error(withCloudflareLevel(obj, 'error'))
+        }
+      }
+    });
+    cachedLevel = level;
+  }
+
+  return cachedLogger;
 }
 
 function resolveRequestId(request: Request): string | null {
@@ -54,13 +79,13 @@ function resolveRequestId(request: Request): string | null {
   );
 }
 
-function resolveLogLevel(): LevelWithSilent {
-  const configuredLevel = normalizeLogLevel(env.LOG_LEVEL ?? globalThis.process?.env?.LOG_LEVEL);
+function resolveLogLevel(logLevel: unknown): LevelWithSilent {
+  const configuredLevel = normalizeLogLevel(logLevel);
   if (configuredLevel) {
     return configuredLevel;
   }
 
-  return dev ? 'debug' : 'info';
+  return 'info';
 }
 
 function normalizeLogLevel(value: unknown): LevelWithSilent | null {

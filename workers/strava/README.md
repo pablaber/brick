@@ -1,10 +1,11 @@
-# Strava Worker (Phase 10 Scheduled Sync)
+# Strava Worker (Phase 11 Webhooks)
 
 This Cloudflare Worker handles:
 
 - Strava OAuth connection flow
 - Manual activity sync (`POST /sync/manual`)
 - Scheduled activity sync via Cloudflare Cron Trigger (`scheduled()`)
+- Strava webhook verification + event intake (`GET/POST /strava/webhook`)
 
 Tokens remain server-side in Supabase.
 
@@ -23,35 +24,38 @@ Worker default URL: `http://localhost:8787`.
 ## Routes
 
 - `GET /health`
-  - Purpose: quick liveliness/status probe for local/dev/prod checks.
-  - Auth: none.
-  - Response: `200` JSON with `ok`, `service`, and `timestamp`.
-
 - `GET /strava/connect?token=<signed-token>`
-  - Purpose: starts Strava OAuth by validating a short-lived signed token from the web app and redirecting to Strava.
-  - Query params: `token` (required).
-  - Auth: token signed with `WORKER_SHARED_SECRET`.
-  - Success: `302` redirect to Strava authorize URL.
-  - Failures: `400` for missing token, `401` for invalid/expired token.
-
 - `GET /strava/callback?code=...&state=...`
-  - Purpose: handles Strava OAuth callback, validates state, exchanges code for tokens, and upserts `strava_connections`.
-  - Query params: `state` and `code` on success path; Strava can also return `error=access_denied`.
-  - Auth: OAuth state validation against `oauth_states` table.
-  - Success: `302` redirect back to `APP_URL/settings?strava=connected`.
-  - Failures: safe redirects like `?strava=denied`, `?strava=invalid_state`, or `?strava=error`.
-
 - `POST /sync/manual`
-  - Purpose: runs user activity sync on demand from the web app.
-  - Body: JSON with `token` (required), plus optional `cursorBefore`, `syncRunId`, and `estimatedTotalActivities` for multi-batch/manual backfill flow.
-  - Auth: signed manual sync token (`WORKER_SHARED_SECRET`).
-  - Success: `200` JSON sync summary (`syncRunId`, fetched/upserted counts, pagination fields).
-  - Failures: `409` if a sync is already running, `400` when user has no Strava connection, `500` for internal/safe failure.
+- `GET /strava/webhook`
+- `POST /strava/webhook`
 
-- `GET /__scheduled?cron=...` (Wrangler local only)
-  - Purpose: local endpoint exposed by `wrangler dev --test-scheduled` to simulate cron execution.
-  - Auth: none (local dev tool endpoint).
-  - Usage: trigger scheduled handler manually during local testing.
+## Webhook Behavior
+
+### `GET /strava/webhook`
+
+Strava callback verification endpoint.
+
+- Requires `hub.mode=subscribe`.
+- Requires `hub.challenge`.
+- Requires `hub.verify_token` matching `STRAVA_WEBHOOK_VERIFY_TOKEN`.
+- Success response: `200` JSON `{ "hub.challenge": "<challenge>" }`.
+
+### `POST /strava/webhook`
+
+Signed webhook intake endpoint.
+
+- Requires `STRAVA_WEBHOOK_SIGNING_SECRET` and valid `X-Strava-Signature` by default.
+- If `STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION=true`, signature verification is bypassed.
+- Persists each valid event to `strava_webhook_events`.
+- Returns `200` quickly, then processes async with `waitUntil()`.
+
+Processing behavior:
+
+- `activity:create` / `activity:update`: fetches only `GET /api/v3/activities/{id}` and upserts one row.
+- `activity:delete`: deletes local `activities` row by `(user_id, strava_activity_id)` only.
+- `athlete` deauthorization (`updates.authorized === 'false'`): keeps `strava_connections` row, nulls token fields, sets `deauthorized_at`.
+- Unknown owner events are persisted and marked `ignored`.
 
 ## Environment Variables
 
@@ -62,80 +66,87 @@ Required:
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 - `STRAVA_REDIRECT_URI`
+- `STRAVA_WEBHOOK_VERIFY_TOKEN`
+- `STRAVA_WEBHOOK_SIGNING_SECRET`
 - `APP_URL`
 - `WORKER_SHARED_SECRET`
 
-Optional scheduled sync tuning:
+Optional:
 
+- `STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION` (`true` disables webhook signature checks; keep `false` in production)
+- `STRAVA_WEBHOOK_CALLBACK_URL` (used by subscription helper scripts)
 - `STRAVA_SCHEDULED_SYNC_MIN_INTERVAL_HOURS` (default `6`)
 - `STRAVA_SCHEDULED_SYNC_LIMIT` (default `25`)
 
-## Scheduled Cron Trigger
+## Webhook Subscription Commands
 
-The worker defines a cron trigger in `wrangler.jsonc` (`0 */6 * * *`, every 6 hours) that invokes the Worker `scheduled()` handler.
+Run from repo root:
 
-Each run:
+```bash
+export STRAVA_CLIENT_ID="<client-id>"
+export STRAVA_CLIENT_SECRET="<client-secret>"
+export STRAVA_WEBHOOK_CALLBACK_URL="https://api.getbricked.fit/strava/webhook"
+export STRAVA_WEBHOOK_VERIFY_TOKEN="<verify-token>"
 
-1. Reads cron metadata (`controller.cron`) and starts a scheduled sync run.
-2. Finds connected users due for sync (`last_synced_at` missing or older than configured interval).
-3. For each due user, runs the same core sync pipeline used by manual sync (token refresh, Strava fetch, activity upsert, sync_runs updates).
-4. Skips users that are currently running a sync or were synced too recently.
-5. Continues processing remaining users if a single user fails.
-6. Logs a safe summary (`usersConsidered`, `usersSynced`, `usersSkipped`, `usersFailed`).
+pnpm --filter @brick/strava-worker webhook:view
+pnpm --filter @brick/strava-worker webhook:create
+pnpm --filter @brick/strava-worker webhook:delete -- <subscription-id>
+```
 
-## Scheduled Sync Behavior
+The script does not auto-load `workers/strava/.dev.vars`; required values must be exported in your shell.
 
-Production cron schedule is configured in `wrangler.jsonc`:
+Script env requirements:
+
+- `STRAVA_CLIENT_ID`
+- `STRAVA_CLIENT_SECRET`
+- `STRAVA_WEBHOOK_CALLBACK_URL`
+- `STRAVA_WEBHOOK_VERIFY_TOKEN`
+
+`webhook:create` checks for an existing subscription first and does not create a duplicate.
+
+## Local Webhook Testing
+
+### HTTPS callback requirement
+
+Strava must reach a public HTTPS callback URL. For local testing, expose your worker with a tunnel (for example, `cloudflared` or `ngrok`) and use that HTTPS URL for webhook subscription creation.
+
+### Verification request test
+
+```bash
+curl "http://localhost:8787/strava/webhook?hub.mode=subscribe&hub.challenge=test-challenge&hub.verify_token=<your-verify-token>"
+```
+
+Expected: `200` and `{"hub.challenge":"test-challenge"}`.
+
+### Signed POST test
+
+Generate signature and send event:
+
+```bash
+BODY='{"aspect_type":"create","event_time":1716126040,"object_id":1360128428,"object_type":"activity","owner_id":134815,"subscription_id":120475}'
+TS=$(date +%s)
+SIG=$(printf '%s' "${TS}.${BODY}" | openssl dgst -sha256 -hmac "$STRAVA_WEBHOOK_SIGNING_SECRET" -hex | sed 's/^.* //')
+
+curl -i "http://localhost:8787/strava/webhook" \
+  -H "content-type: application/json" \
+  -H "X-Strava-Signature: t=${TS},v1=${SIG}" \
+  -d "$BODY"
+```
+
+Expected: `200` and persisted event in `strava_webhook_events`.
+
+## Scheduled Sync Notes
+
+Cron schedule (in `wrangler.jsonc`):
 
 - `0 */6 * * *` (every 6 hours)
 
-When cron runs, the worker:
+Scheduled sync excludes deauthorized connections and rows with null token fields.
 
-1. Loads Strava-connected users.
-2. Filters to users due for sync (never synced or older than interval).
-3. Runs sync sequentially per user.
-4. Skips users with an active running sync.
-5. Reuses the same core sync logic as manual sync.
-6. Records each sync in `sync_runs` with `sync_type='scheduled'`.
-7. Continues processing remaining users when one user fails.
+## Troubleshooting
 
-## Manual Sync Behavior
-
-Manual sync still runs via `POST /sync/manual` and:
-
-1. Verifies signed request token.
-2. Checks for running sync lock.
-3. Runs shared sync logic.
-4. Records `sync_runs.sync_type='manual'`.
-
-## Local Scheduled Testing
-
-Cron does not auto-fire locally. Use one of these flows.
-
-Interactive:
-
-```bash
-pnpm --filter @brick/strava-worker dev:scheduled
-curl "http://localhost:8787/__scheduled?cron=0+*/6+*+*+*"
-```
-
-One-shot:
-
-```bash
-pnpm --filter @brick/strava-worker test:scheduled
-```
-
-The one-shot script starts Wrangler in scheduled test mode, waits for `/health`, triggers `/__scheduled`, prints response output, and stops Wrangler.
-
-## Deployment Notes
-
-- Cron triggers are defined in Wrangler config and deployed with the worker.
-- Production secrets must be configured separately; do not commit secret values.
-
-Example commands:
-
-```bash
-wrangler secret put SUPABASE_SECRET_KEY
-wrangler secret put STRAVA_CLIENT_SECRET
-wrangler secret put WORKER_SHARED_SECRET
-```
+- `401` on webhook POST: missing/invalid `X-Strava-Signature`, timestamp out of range, or wrong signing secret.
+- Signature checks disabled: ensure `STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION` is set only for temporary/local fallback.
+- `403` on webhook GET verify: incorrect `hub.verify_token`.
+- Webhook event stays `failed`: inspect `strava_webhook_events.processing_error` and worker logs.
+- `sync=not_connected`: no active Strava connection or connection is deauthorized.

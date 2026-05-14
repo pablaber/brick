@@ -5,7 +5,14 @@ import { findUsersDueForScheduledSync, runScheduledSync } from './scheduled-sync
 import { syncUserActivities } from './sync.js';
 
 const mockState = vi.hoisted(() => ({
-  connections: [] as Array<{ user_id: string; last_synced_at: string | null }>
+  connections: [] as Array<{
+    user_id: string;
+    last_synced_at: string | null;
+    access_token: string | null;
+    refresh_token: string | null;
+    expires_at: string | null;
+    deauthorized_at: string | null;
+  }>
 }));
 
 vi.mock('./supabase.js', () => ({
@@ -39,6 +46,8 @@ const env: Env = {
   STRAVA_CLIENT_ID: '12345',
   STRAVA_CLIENT_SECRET: 'strava-secret',
   STRAVA_REDIRECT_URI: 'http://localhost:8787/strava/callback',
+  STRAVA_WEBHOOK_VERIFY_TOKEN: 'verify-token',
+  STRAVA_WEBHOOK_SIGNING_SECRET: 'webhook-signing-secret',
   APP_URL: 'http://localhost:5173',
   WORKER_SHARED_SECRET: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 };
@@ -55,7 +64,7 @@ describe('findUsersDueForScheduledSync', () => {
   });
 
   it('includes users with null last_synced_at', async () => {
-    mockState.connections = [{ user_id: 'u1', last_synced_at: null }];
+    mockState.connections = [connectedRow({ user_id: 'u1', last_synced_at: null })];
 
     const result = await findUsersDueForScheduledSync({
       env,
@@ -69,8 +78,8 @@ describe('findUsersDueForScheduledSync', () => {
 
   it('excludes users synced within min interval', async () => {
     mockState.connections = [
-      { user_id: 'u1', last_synced_at: '2026-05-11T18:30:00.000Z' },
-      { user_id: 'u2', last_synced_at: '2026-05-11T10:00:00.000Z' }
+      connectedRow({ user_id: 'u1', last_synced_at: '2026-05-11T18:30:00.000Z' }),
+      connectedRow({ user_id: 'u2', last_synced_at: '2026-05-11T10:00:00.000Z' })
     ];
 
     const result = await findUsersDueForScheduledSync({
@@ -84,9 +93,9 @@ describe('findUsersDueForScheduledSync', () => {
 
   it('respects limit', async () => {
     mockState.connections = [
-      { user_id: 'u1', last_synced_at: null },
-      { user_id: 'u2', last_synced_at: null },
-      { user_id: 'u3', last_synced_at: null }
+      connectedRow({ user_id: 'u1', last_synced_at: null }),
+      connectedRow({ user_id: 'u2', last_synced_at: null }),
+      connectedRow({ user_id: 'u3', last_synced_at: null })
     ];
 
     const result = await findUsersDueForScheduledSync({
@@ -97,13 +106,33 @@ describe('findUsersDueForScheduledSync', () => {
 
     expect(result).toHaveLength(2);
   });
+
+  it('excludes deauthorized or missing-token connections', async () => {
+    mockState.connections = [
+      connectedRow({ user_id: 'u1', last_synced_at: null }),
+      {
+        ...connectedRow({ user_id: 'u2', last_synced_at: null }),
+        deauthorized_at: '2026-05-01T00:00:00Z'
+      },
+      { ...connectedRow({ user_id: 'u3', last_synced_at: null }), access_token: null },
+      { ...connectedRow({ user_id: 'u4', last_synced_at: null }), refresh_token: null },
+      { ...connectedRow({ user_id: 'u5', last_synced_at: null }), expires_at: null }
+    ];
+
+    const result = await findUsersDueForScheduledSync({
+      env,
+      now: new Date('2026-05-11T20:00:00.000Z')
+    });
+
+    expect(result.map((row) => row.userId)).toEqual(['u1']);
+  });
 });
 
 describe('runScheduledSync', () => {
   beforeEach(() => {
     mockState.connections = [
-      { user_id: 'u1', last_synced_at: null },
-      { user_id: 'u2', last_synced_at: null }
+      connectedRow({ user_id: 'u1', last_synced_at: null }),
+      connectedRow({ user_id: 'u2', last_synced_at: null })
     ];
     vi.mocked(syncUserActivities).mockReset();
   });
@@ -157,7 +186,7 @@ describe('runScheduledSync', () => {
   });
 
   it('continues a paginated scheduled sync until the run completes', async () => {
-    mockState.connections = [{ user_id: 'u1', last_synced_at: null }];
+    mockState.connections = [connectedRow({ user_id: 'u1', last_synced_at: null })];
     vi.mocked(syncUserActivities)
       .mockResolvedValueOnce({
         ok: true,
@@ -214,7 +243,7 @@ describe('runScheduledSync', () => {
   });
 
   it('counts skipped users in summary', async () => {
-    mockState.connections = [{ user_id: 'u1', last_synced_at: null }];
+    mockState.connections = [connectedRow({ user_id: 'u1', last_synced_at: null })];
     vi.mocked(syncUserActivities).mockResolvedValue({
       ok: true,
       statusCode: 200,
@@ -244,3 +273,20 @@ describe('runScheduledSync', () => {
     expect(summary.usersFailed).toBe(0);
   });
 });
+
+function connectedRow({
+  user_id,
+  last_synced_at
+}: {
+  user_id: string;
+  last_synced_at: string | null;
+}) {
+  return {
+    user_id,
+    last_synced_at,
+    access_token: 'access-token',
+    refresh_token: 'refresh-token',
+    expires_at: '2099-01-01T00:00:00.000Z',
+    deauthorized_at: null
+  };
+}

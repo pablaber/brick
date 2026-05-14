@@ -1,9 +1,11 @@
 import { mapStravaActivityToActivityRow } from '@brick/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@brick/shared';
+import type { Logger } from 'pino';
 
 import type { Env } from '../env.js';
 import { fetchStravaActivities, fetchStravaActivityTotalCount } from './strava-api.js';
+import { createLogger } from './logger.js';
 import { createServiceSupabaseClient } from './supabase.js';
 import { isTokenExpiredOrExpiringSoon, refreshStravaToken } from './strava-token.js';
 
@@ -27,6 +29,7 @@ export type SyncUserActivitiesOptions = {
   userId: string;
   syncType: SyncType;
   triggeredBy: SyncTrigger;
+  logger?: Logger;
   now?: Date;
   cursorBefore?: number | null;
   requestedSyncRunId?: string;
@@ -56,6 +59,17 @@ export type SyncUserActivitiesResult = {
 export async function syncUserActivities(
   options: SyncUserActivitiesOptions
 ): Promise<SyncUserActivitiesResult> {
+  const baseLogger =
+    options.logger ??
+    createLogger({
+      env: options.env
+    });
+  const log = baseLogger.child({
+    methodName: 'syncUserActivities',
+    userId: options.userId,
+    syncType: options.syncType,
+    triggeredBy: options.triggeredBy
+  });
   const supabase = options.supabase ?? createServiceSupabaseClient(options.env);
   const now = options.now ?? new Date();
   const nowIso = now.toISOString();
@@ -86,7 +100,7 @@ export async function syncUserActivities(
     const { data: connection, error: connectionError } = await supabase
       .from('strava_connections')
       .select(
-        'user_id,strava_athlete_id,access_token,refresh_token,expires_at,scope,last_synced_at,created_at,updated_at'
+        'user_id,strava_athlete_id,access_token,refresh_token,expires_at,scope,deauthorized_at,last_synced_at,created_at,updated_at,webhook_events_received_at,last_webhook_event_at'
       )
       .eq('user_id', options.userId)
       .maybeSingle();
@@ -97,6 +111,15 @@ export async function syncUserActivities(
 
     if (!connection) {
       throw new SyncError('No Strava connection found', 400);
+    }
+
+    if (
+      connection.deauthorized_at ||
+      !connection.access_token ||
+      !connection.refresh_token ||
+      !connection.expires_at
+    ) {
+      throw new SyncError('No active Strava connection found', 400);
     }
 
     if (options.syncType === 'scheduled') {
@@ -126,8 +149,14 @@ export async function syncUserActivities(
       activeConnection = await refreshStravaToken({
         env: options.env,
         supabase,
-        connection
+        connection,
+        logger: log
       });
+    }
+
+    const accessToken = activeConnection.access_token;
+    if (!accessToken) {
+      throw new SyncError('No active Strava connection found', 400);
     }
 
     const after =
@@ -142,11 +171,12 @@ export async function syncUserActivities(
           : undefined;
 
     const activities = await fetchStravaActivities({
-      accessToken: activeConnection.access_token,
+      accessToken,
       after,
       before,
       perPage: INITIAL_SYNC_PER_PAGE,
-      maxPages: INITIAL_SYNC_MAX_PAGES
+      maxPages: INITIAL_SYNC_MAX_PAGES,
+      logger: log
     });
 
     const mappedActivities = activities.map((activity) =>
@@ -172,8 +202,9 @@ export async function syncUserActivities(
     const estimatedTotalActivities =
       estimatedTotalFromClient ??
       (await fetchStravaActivityTotalCount({
-        accessToken: activeConnection.access_token,
-        athleteId: activeConnection.strava_athlete_id
+        accessToken,
+        athleteId: activeConnection.strava_athlete_id,
+        logger: log
       }));
 
     const { error: runningUpdateError } = await supabase
@@ -261,6 +292,18 @@ export async function syncUserActivities(
   } catch (error) {
     const statusCode = error instanceof SyncError ? error.statusCode : 500;
     const safeErrorMessage = error instanceof SyncError ? error.message : 'Sync failed.';
+    const errorDetails = buildErrorDetails(error);
+    log.error(
+      {
+        ...errorDetails,
+        statusCode,
+        safeErrorMessage,
+        syncRunId: activeSyncRun?.id ?? null,
+        cursorBefore: normalizedCursorBefore,
+        estimatedTotalFromClient
+      },
+      'syncUserActivities failed.'
+    );
 
     if (activeSyncRun) {
       await supabase
@@ -502,5 +545,41 @@ class SyncError extends Error {
     readonly statusCode: number
   ) {
     super(message);
+  }
+}
+
+function buildErrorDetails(error: unknown): {
+  errorName: string;
+  errorMessage: string;
+  errorStack: string | null;
+} {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack ? error.stack.slice(0, 4_000) : null
+    };
+  }
+
+  if (typeof error === 'string') {
+    return {
+      errorName: 'NonErrorString',
+      errorMessage: error,
+      errorStack: null
+    };
+  }
+
+  try {
+    return {
+      errorName: 'NonErrorValue',
+      errorMessage: JSON.stringify(error),
+      errorStack: null
+    };
+  } catch {
+    return {
+      errorName: 'NonErrorValue',
+      errorMessage: String(error),
+      errorStack: null
+    };
   }
 }

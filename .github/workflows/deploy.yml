@@ -23,10 +23,14 @@ jobs:
       SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
       SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       STRAVA_CLIENT_ID: ${{ vars.STRAVA_CLIENT_ID }}
+      LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+      STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION: ${{ vars.STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION }}
 
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
       WORKER_SHARED_SECRET: ${{ secrets.WORKER_SHARED_SECRET }}
+      STRAVA_WEBHOOK_VERIFY_TOKEN: ${{ secrets.STRAVA_WEBHOOK_VERIFY_TOKEN }}
+      STRAVA_WEBHOOK_SIGNING_SECRET: ${{ secrets.STRAVA_WEBHOOK_SIGNING_SECRET }}
 
     steps:
       - name: Check out repository
@@ -59,7 +63,9 @@ jobs:
             SUPABASE_SECRET_KEY \
             STRAVA_CLIENT_ID \
             STRAVA_CLIENT_SECRET \
-            WORKER_SHARED_SECRET; do
+            WORKER_SHARED_SECRET \
+            STRAVA_WEBHOOK_VERIFY_TOKEN \
+            STRAVA_WEBHOOK_SIGNING_SECRET; do
             if [ -z "${!required}" ]; then
               echo "Missing required value: ${required}" >&2
               exit 1
@@ -73,7 +79,10 @@ jobs:
           echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}" >> "$GITHUB_ENV"
           echo "STRAVA_WORKER_URL=https://api.getbricked.fit" >> "$GITHUB_ENV"
           echo "STRAVA_REDIRECT_URI=https://api.getbricked.fit/strava/callback" >> "$GITHUB_ENV"
+          echo "STRAVA_WEBHOOK_CALLBACK_URL=https://api.getbricked.fit/strava/webhook" >> "$GITHUB_ENV"
           echo "APP_URL=https://getbricked.fit" >> "$GITHUB_ENV"
+          echo "LOG_LEVEL=${LOG_LEVEL:-debug}" >> "$GITHUB_ENV"
+          echo "STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION=${STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION:-false}" >> "$GITHUB_ENV"
 
       - name: Check formatting
         run: pnpm format
@@ -104,14 +113,19 @@ jobs:
           printf '%s' "$SUPABASE_SECRET_KEY" | pnpm --filter @brick/strava-worker exec wrangler secret put SUPABASE_SECRET_KEY --config wrangler.jsonc
           printf '%s' "$STRAVA_CLIENT_SECRET" | pnpm --filter @brick/strava-worker exec wrangler secret put STRAVA_CLIENT_SECRET --config wrangler.jsonc
           printf '%s' "$WORKER_SHARED_SECRET" | pnpm --filter @brick/strava-worker exec wrangler secret put WORKER_SHARED_SECRET --config wrangler.jsonc
+          printf '%s' "$STRAVA_WEBHOOK_VERIFY_TOKEN" | pnpm --filter @brick/strava-worker exec wrangler secret put STRAVA_WEBHOOK_VERIFY_TOKEN --config wrangler.jsonc
+          printf '%s' "$STRAVA_WEBHOOK_SIGNING_SECRET" | pnpm --filter @brick/strava-worker exec wrangler secret put STRAVA_WEBHOOK_SIGNING_SECRET --config wrangler.jsonc
 
       - name: Deploy Strava worker
         run: |
           pnpm --filter @brick/strava-worker exec wrangler deploy \
             --config wrangler.jsonc \
             --var "SUPABASE_URL:${SUPABASE_URL}" \
+            --var "LOG_LEVEL:${LOG_LEVEL}" \
+            --var "STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION:${STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION}" \
             --var "STRAVA_CLIENT_ID:${STRAVA_CLIENT_ID}" \
             --var "STRAVA_REDIRECT_URI:${STRAVA_REDIRECT_URI}" \
+            --var "STRAVA_WEBHOOK_CALLBACK_URL:${STRAVA_WEBHOOK_CALLBACK_URL}" \
             --var "APP_URL:${APP_URL}"
 
       - name: Sync web worker secrets
@@ -125,4 +139,5 @@ jobs:
             --config wrangler.jsonc \
             --var "PUBLIC_SUPABASE_URL:${PUBLIC_SUPABASE_URL}" \
             --var "PUBLIC_SUPABASE_PUBLISHABLE_KEY:${PUBLIC_SUPABASE_PUBLISHABLE_KEY}" \
-            --var "STRAVA_WORKER_URL:${STRAVA_WORKER_URL}"
+            --var "STRAVA_WORKER_URL:${STRAVA_WORKER_URL}" \
+            --var "LOG_LEVEL:${LOG_LEVEL}"

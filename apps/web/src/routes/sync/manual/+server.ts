@@ -3,7 +3,7 @@ import { json, redirect } from '@sveltejs/kit';
 import { createSignedManualSyncToken } from '@brick/shared';
 
 import { requireUser } from '$lib/server/auth';
-import { logger } from '$lib/server/logger';
+import { createRequestLogger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
 const SYNC_TOKEN_TTL_SECONDS = 5 * 60;
@@ -28,15 +28,24 @@ type WorkerSyncResponse = {
 };
 
 export const POST: RequestHandler = async (event) => {
+  const expectsJsonResponse = expectsJson(event.request);
+  const requestLogger = createRequestLogger({
+    request: event.request,
+    methodName: 'POST /sync/manual',
+    values: { expectsJson: expectsJsonResponse }
+  });
+  requestLogger.debug('Manual sync request received.');
+
   const user = await requireUser(event);
+  const log = requestLogger.child({ userId: user.id });
 
   const workerUrl = env.STRAVA_WORKER_URL?.trim();
   const sharedSecret = env.WORKER_SHARED_SECRET?.trim();
 
   if (!workerUrl || !sharedSecret) {
-    logger.error({ userId: user.id }, 'Missing STRAVA_WORKER_URL or WORKER_SHARED_SECRET.');
+    log.error('Missing STRAVA_WORKER_URL or WORKER_SHARED_SECRET.');
 
-    if (expectsJson(event.request)) {
+    if (expectsJsonResponse) {
       return json({ ok: false, error: 'Sync is not configured.' }, { status: 500 });
     }
 
@@ -44,13 +53,17 @@ export const POST: RequestHandler = async (event) => {
   }
 
   const payload = await parseJsonPayload(event.request);
-  logger.info(
+  log.debug(
     {
-      userId: user.id,
+      hasPayload: Boolean(payload)
+    },
+    'Manual sync payload parsed.'
+  );
+  log.info(
+    {
       cursorBefore: payload?.cursorBefore ?? null,
       syncRunId: payload?.syncRunId ?? null,
-      estimatedTotalActivities: payload?.estimatedTotalActivities ?? null,
-      expectsJson: expectsJson(event.request)
+      estimatedTotalActivities: payload?.estimatedTotalActivities ?? null
     },
     'Manual sync requested.'
   );
@@ -68,6 +81,13 @@ export const POST: RequestHandler = async (event) => {
   );
 
   const url = new URL('/sync/manual', workerUrl);
+  log.debug(
+    {
+      workerOrigin: url.origin,
+      workerPath: url.pathname
+    },
+    'Calling Strava worker manual sync endpoint.'
+  );
 
   try {
     const response = await fetch(url, {
@@ -84,9 +104,15 @@ export const POST: RequestHandler = async (event) => {
     });
 
     const responseBody = (await response.json()) as WorkerSyncResponse;
-    logger.info(
+    log.debug(
       {
-        userId: user.id,
+        responseStatus: response.status,
+        responseOk: response.ok
+      },
+      'Manual sync worker response received.'
+    );
+    log.info(
+      {
         status: response.status,
         ok: response.ok,
         bodyOk: responseBody.ok ?? null,
@@ -100,14 +126,13 @@ export const POST: RequestHandler = async (event) => {
       'Manual sync worker response.'
     );
 
-    if (expectsJson(event.request)) {
+    if (expectsJsonResponse) {
       return json(responseBody, { status: response.status });
     }
 
     if (response.ok && responseBody.ok && responseBody.hasMore) {
-      logger.info(
+      log.info(
         {
-          userId: user.id,
           syncRunId: responseBody.syncRunId ?? payload?.syncRunId ?? null
         },
         'Manual sync redirecting with running status.'
@@ -116,9 +141,8 @@ export const POST: RequestHandler = async (event) => {
     }
 
     if (response.ok && responseBody.ok) {
-      logger.info(
+      log.info(
         {
-          userId: user.id,
           syncRunId: responseBody.syncRunId ?? payload?.syncRunId ?? null
         },
         'Manual sync redirecting with success status.'
@@ -127,9 +151,8 @@ export const POST: RequestHandler = async (event) => {
     }
 
     if (response.status === 409) {
-      logger.info(
+      log.info(
         {
-          userId: user.id,
           syncRunId: responseBody.syncRunId ?? payload?.syncRunId ?? null
         },
         'Manual sync redirecting with running status (409 conflict).'
@@ -138,18 +161,12 @@ export const POST: RequestHandler = async (event) => {
     }
 
     if (response.status === 400) {
-      logger.info(
-        {
-          userId: user.id
-        },
-        'Manual sync redirecting with not_connected status.'
-      );
+      log.info('Manual sync redirecting with not_connected status.');
       throw redirect(303, '/settings?sync=not_connected');
     }
 
-    logger.warn(
+    log.warn(
       {
-        userId: user.id,
         status: response.status,
         error: responseBody.error ?? null
       },
@@ -161,9 +178,9 @@ export const POST: RequestHandler = async (event) => {
       throw error;
     }
 
-    logger.error({ userId: user.id, err: error }, 'Manual sync request failed.');
+    log.error({ err: error }, 'Manual sync request failed.');
 
-    if (expectsJson(event.request)) {
+    if (expectsJsonResponse) {
       return json({ ok: false, error: 'Manual sync request failed.' }, { status: 500 });
     }
 

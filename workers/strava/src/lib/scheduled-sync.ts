@@ -42,7 +42,7 @@ export async function findUsersDueForScheduledSync({
   const supabase = createServiceSupabaseClient(env);
   const { data, error } = await supabase
     .from('strava_connections')
-    .select('user_id,last_synced_at')
+    .select('user_id,last_synced_at,access_token,refresh_token,expires_at,deauthorized_at')
     .order('last_synced_at', { ascending: true, nullsFirst: true })
     .limit(Math.max(limit * 3, limit));
 
@@ -53,6 +53,10 @@ export async function findUsersDueForScheduledSync({
   const cutoffMs = now.getTime() - minSyncIntervalHours * 60 * 60 * 1000;
   const dueUsers = (data ?? [])
     .filter((row) => {
+      if (row.deauthorized_at || !row.access_token || !row.refresh_token || !row.expires_at) {
+        return false;
+      }
+
       if (!row.last_synced_at) {
         return true;
       }

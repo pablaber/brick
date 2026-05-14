@@ -63,6 +63,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      allowed_emails: {
+        Row: {
+          created_at: string;
+          email: string;
+          id: string;
+          invited_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          email: string;
+          id?: string;
+          invited_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          id?: string;
+          invited_by?: string | null;
+        };
+        Relationships: [];
+      };
       oauth_states: {
         Row: {
           created_at: string;
@@ -96,35 +117,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      allowed_emails: {
-        Row: {
-          id: string;
-          email: string;
-          invited_by: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          email: string;
-          invited_by?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          email?: string;
-          invited_by?: string | null;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'allowed_emails_invited_by_fkey';
-            columns: ['invited_by'];
-            isOneToOne: false;
-            referencedRelation: 'users';
-            referencedColumns: ['id'];
-          }
-        ];
-      };
       profiles: {
         Row: {
           created_at: string;
@@ -151,37 +143,106 @@ export type Database = {
       };
       strava_connections: {
         Row: {
-          access_token: string;
+          access_token: string | null;
           created_at: string;
-          expires_at: string;
+          deauthorized_at: string | null;
+          expires_at: string | null;
           last_synced_at: string | null;
-          refresh_token: string;
+          last_webhook_event_at: string | null;
+          refresh_token: string | null;
           scope: string | null;
           strava_athlete_id: number;
           updated_at: string;
           user_id: string;
+          webhook_events_received_at: string | null;
         };
         Insert: {
-          access_token: string;
+          access_token?: string | null;
           created_at?: string;
-          expires_at: string;
+          deauthorized_at?: string | null;
+          expires_at?: string | null;
           last_synced_at?: string | null;
-          refresh_token: string;
+          last_webhook_event_at?: string | null;
+          refresh_token?: string | null;
           scope?: string | null;
           strava_athlete_id: number;
           updated_at?: string;
           user_id: string;
+          webhook_events_received_at?: string | null;
         };
         Update: {
-          access_token?: string;
+          access_token?: string | null;
           created_at?: string;
-          expires_at?: string;
+          deauthorized_at?: string | null;
+          expires_at?: string | null;
           last_synced_at?: string | null;
-          refresh_token?: string;
+          last_webhook_event_at?: string | null;
+          refresh_token?: string | null;
           scope?: string | null;
           strava_athlete_id?: number;
           updated_at?: string;
           user_id?: string;
+          webhook_events_received_at?: string | null;
+        };
+        Relationships: [];
+      };
+      strava_webhook_events: {
+        Row: {
+          aspect_type: string;
+          created_at: string;
+          event_key: string;
+          event_time: string | null;
+          id: string;
+          object_id: number;
+          object_type: string;
+          owner_id: number;
+          processed_at: string | null;
+          processing_error: string | null;
+          processing_status: string;
+          raw_json: Json;
+          received_at: string;
+          signature_header: string;
+          subscription_id: number | null;
+          updates: Json | null;
+          user_id: string | null;
+        };
+        Insert: {
+          aspect_type: string;
+          created_at?: string;
+          event_key: string;
+          event_time?: string | null;
+          id?: string;
+          object_id: number;
+          object_type: string;
+          owner_id: number;
+          processed_at?: string | null;
+          processing_error?: string | null;
+          processing_status?: string;
+          raw_json: Json;
+          received_at?: string;
+          signature_header: string;
+          subscription_id?: number | null;
+          updates?: Json | null;
+          user_id?: string | null;
+        };
+        Update: {
+          aspect_type?: string;
+          created_at?: string;
+          event_key?: string;
+          event_time?: string | null;
+          id?: string;
+          object_id?: number;
+          object_type?: string;
+          owner_id?: number;
+          processed_at?: string | null;
+          processing_error?: string | null;
+          processing_status?: string;
+          raw_json?: Json;
+          received_at?: string;
+          signature_header?: string;
+          subscription_id?: number | null;
+          updates?: Json | null;
+          user_id?: string | null;
         };
         Relationships: [];
       };
@@ -319,13 +380,13 @@ export type Database = {
       monthly_activity_breakdown: {
         Row: {
           activity_count: number | null;
+          period_start: string | null;
           sport_type: string | null;
           total_distance_meters: number | null;
           total_distance_miles: number | null;
           total_moving_minutes: number | null;
           total_moving_seconds: number | null;
           user_id: string | null;
-          period_start: string | null;
         };
         Relationships: [];
       };
