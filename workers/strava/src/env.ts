@@ -1,6 +1,7 @@
 export type Env = {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
+  LOG_LEVEL?: string;
   STRAVA_CLIENT_ID: string;
   STRAVA_CLIENT_SECRET: string;
   STRAVA_REDIRECT_URI: string;

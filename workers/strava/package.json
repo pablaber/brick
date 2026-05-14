@@ -21,7 +21,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
     "@brick/shared": "workspace:*",
-    "hono": "^4.10.0"
+    "hono": "^4.10.0",
+    "pino": "^10.3.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260508.0",

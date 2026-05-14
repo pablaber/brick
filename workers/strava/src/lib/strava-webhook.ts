@@ -2,6 +2,7 @@ import { mapStravaActivityToActivityRow, type Database } from '@brick/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Env } from '../env.js';
+import { createLogger } from './logger.js';
 import { fetchStravaActivityById, StravaApiStatusError } from './strava-api.js';
 import { refreshStravaToken, isTokenExpiredOrExpiringSoon } from './strava-token.js';
 import { createServiceSupabaseClient } from './supabase.js';
@@ -108,6 +109,19 @@ export async function processStravaWebhookEvent({
   now = new Date(),
   supabase = createServiceSupabaseClient(env)
 }: ProcessStravaWebhookEventOptions): Promise<void> {
+  const log = createLogger({
+    env,
+    values: {
+      methodName: 'processStravaWebhookEvent',
+      eventId,
+      objectType: event.object_type,
+      objectId: event.object_id,
+      aspectType: event.aspect_type,
+      ownerId: event.owner_id,
+      userId
+    }
+  });
+
   try {
     if (isAthleteDeauthorizationEvent(event)) {
       const connection = await findConnectionForDeauthorization({
@@ -267,24 +281,14 @@ export async function processStravaWebhookEvent({
     const safeError =
       error instanceof Error ? error.message.slice(0, 500) : 'Webhook processing failed.';
 
-    console.error(
-      'Webhook event processing failed.',
-      JSON.stringify({
-        eventId,
-        objectType: event.object_type,
-        objectId: event.object_id,
-        aspectType: event.aspect_type,
-        ownerId: event.owner_id,
-        userId,
-        error: safeError
-      })
-    );
+    log.error({ err: error, error: safeError }, 'Webhook event processing failed.');
 
     await markWebhookEventFailed({
       supabase,
       eventId,
       reason: safeError,
-      nowIso: now.toISOString()
+      nowIso: now.toISOString(),
+      log
     });
   }
 }
@@ -419,12 +423,14 @@ async function markWebhookEventFailed({
   supabase,
   eventId,
   reason,
-  nowIso
+  nowIso,
+  log
 }: {
   supabase: SupabaseClient<Database>;
   eventId: string;
   reason: string;
   nowIso: string;
+  log: ReturnType<typeof createLogger>;
 }) {
   const { error } = await supabase
     .from('strava_webhook_events')
@@ -436,7 +442,14 @@ async function markWebhookEventFailed({
     .eq('id', eventId);
 
   if (error) {
-    console.error('Unable to persist webhook failed status.', JSON.stringify({ eventId, reason }));
+    log.error(
+      {
+        err: error,
+        failedEventId: eventId,
+        reason
+      },
+      'Unable to persist webhook failed status.'
+    );
   }
 }
 

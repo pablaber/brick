@@ -8,6 +8,7 @@ import {
   processStravaWebhookEvent,
   resolveConnectionForOwner
 } from '../lib/strava-webhook.js';
+import { createRequestLogger } from '../lib/logger.js';
 import { createServiceSupabaseClient } from '../lib/supabase.js';
 import { verifyStravaWebhookSignature } from '../lib/webhook-signature.js';
 
@@ -16,6 +17,11 @@ export const webhookRoutes = new Hono<{ Bindings: Env }>();
 type WebhookEventInsert = Database['public']['Tables']['strava_webhook_events']['Insert'];
 
 webhookRoutes.get('/webhook', async (c) => {
+  const log = createRequestLogger({
+    env: c.env,
+    request: c.req.raw,
+    methodName: 'GET /strava/webhook'
+  });
   const mode = c.req.query('hub.mode');
   const challenge = c.req.query('hub.challenge');
   const verifyToken = c.req.query('hub.verify_token');
@@ -32,16 +38,31 @@ webhookRoutes.get('/webhook', async (c) => {
     return c.json({ ok: false, error: 'Invalid webhook verification token.' }, 403);
   }
 
+  log.debug('Webhook verification succeeded.');
   return c.json({ 'hub.challenge': challenge }, 200);
 });
 
 webhookRoutes.post('/webhook', async (c) => {
+  const requestLogger = createRequestLogger({
+    env: c.env,
+    request: c.req.raw,
+    methodName: 'POST /strava/webhook'
+  });
   const disableSignatureVerification =
     c.env.STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION?.trim().toLowerCase() === 'true';
   const signingSecret = c.env.STRAVA_WEBHOOK_SIGNING_SECRET?.trim();
   const signatureHeader = c.req.header('x-strava-signature');
 
   const rawBody = await c.req.raw.text();
+  requestLogger.debug(
+    {
+      disableSignatureVerification,
+      hasSigningSecret: Boolean(signingSecret),
+      hasSignatureHeader: Boolean(signatureHeader),
+      bodyLength: rawBody.length
+    },
+    'Webhook event received.'
+  );
 
   if (!disableSignatureVerification) {
     if (!signingSecret) {
@@ -76,6 +97,13 @@ webhookRoutes.post('/webhook', async (c) => {
   } catch {
     return c.json({ ok: false, error: 'Invalid webhook payload shape.' }, 400);
   }
+  const log = requestLogger.child({
+    ownerId: event.owner_id,
+    objectType: event.object_type,
+    objectId: event.object_id,
+    aspectType: event.aspect_type
+  });
+  log.debug('Webhook payload parsed.');
 
   const supabase = createServiceSupabaseClient(c.env);
   const nowIso = new Date().toISOString();
@@ -90,7 +118,7 @@ webhookRoutes.post('/webhook', async (c) => {
     });
     connectionUserId = resolvedConnection.userId;
   } catch (error) {
-    console.error('Failed to resolve webhook owner connection.', error);
+    log.error({ err: error }, 'Failed to resolve webhook owner connection.');
     return c.json({ ok: false, error: 'Unable to resolve webhook owner.' }, 500);
   }
 
@@ -98,7 +126,7 @@ webhookRoutes.post('/webhook', async (c) => {
   try {
     eventKey = await createWebhookEventKey(event);
   } catch (error) {
-    console.error('Failed to compute webhook event key.', error);
+    log.error({ err: error }, 'Failed to compute webhook event key.');
     return c.json({ ok: false, error: 'Unable to compute webhook event key.' }, 500);
   }
 
@@ -126,12 +154,14 @@ webhookRoutes.post('/webhook', async (c) => {
 
   if (insertError) {
     if (isUniqueConstraintViolation(insertError)) {
+      log.info('Duplicate webhook event ignored.');
       return c.json({ ok: true }, 200);
     }
 
-    console.error('Failed to persist webhook event.', insertError);
+    log.error({ err: insertError }, 'Failed to persist webhook event.');
     return c.json({ ok: false, error: 'Unable to persist webhook event.' }, 500);
   }
+  log.debug({ eventId: persistedEvent.id }, 'Webhook event persisted.');
 
   if (connectionUserId) {
     const { error: updateConnectionError } = await supabase
@@ -144,9 +174,12 @@ webhookRoutes.post('/webhook', async (c) => {
       .eq('user_id', connectionUserId);
 
     if (updateConnectionError) {
-      console.error(
-        'Failed to update Strava connection webhook timestamps.',
-        updateConnectionError
+      log.warn(
+        {
+          userId: connectionUserId,
+          err: updateConnectionError
+        },
+        'Failed to update Strava connection webhook timestamps.'
       );
     }
   }
@@ -160,6 +193,13 @@ webhookRoutes.post('/webhook', async (c) => {
     })
   );
 
+  log.info(
+    {
+      eventId: persistedEvent.id,
+      userId: connectionUserId
+    },
+    'Webhook event accepted for async processing.'
+  );
   return c.json({ ok: true }, 200);
 });
 
