@@ -53,15 +53,16 @@ function getLogger(env: Pick<Env, 'LOG_LEVEL'>): Logger {
       level,
       base: undefined,
       timestamp: pino.stdTimeFunctions.isoTime,
-      formatters: {
-        level(label) {
-          return {
-            level: mapLevelForCloudflare(label)
-          };
-        }
-      },
       browser: {
-        asObject: true
+        asObject: true,
+        write: {
+          trace: (obj) => console.debug(withCloudflareLevel(obj, 'debug')),
+          debug: (obj) => console.debug(withCloudflareLevel(obj, 'debug')),
+          info: (obj) => console.info(withCloudflareLevel(obj, 'info')),
+          warn: (obj) => console.warn(withCloudflareLevel(obj, 'warn')),
+          error: (obj) => console.error(withCloudflareLevel(obj, 'error')),
+          fatal: (obj) => console.error(withCloudflareLevel(obj, 'error'))
+        }
       }
     });
     cachedLevel = level;
@@ -108,18 +109,12 @@ function normalizeLogLevel(value: unknown): LevelWithSilent | null {
   return null;
 }
 
-function mapLevelForCloudflare(level: string): 'debug' | 'info' | 'warn' | 'error' {
-  if (level === 'trace' || level === 'debug') {
-    return 'debug';
-  }
-
-  if (level === 'info') {
-    return 'info';
-  }
-
-  if (level === 'warn') {
-    return 'warn';
-  }
-
-  return 'error';
+function withCloudflareLevel(
+  obj: object,
+  level: 'debug' | 'info' | 'warn' | 'error'
+): Record<string, unknown> {
+  return {
+    ...(obj as Record<string, unknown>),
+    level
+  };
 }
