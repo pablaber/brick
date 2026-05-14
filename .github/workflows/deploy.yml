@@ -24,6 +24,7 @@ jobs:
       SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       STRAVA_CLIENT_ID: ${{ vars.STRAVA_CLIENT_ID }}
       LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+      STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION: ${{ vars.STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION }}
 
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
@@ -81,6 +82,7 @@ jobs:
           echo "STRAVA_WEBHOOK_CALLBACK_URL=https://api.getbricked.fit/strava/webhook" >> "$GITHUB_ENV"
           echo "APP_URL=https://getbricked.fit" >> "$GITHUB_ENV"
           echo "LOG_LEVEL=${LOG_LEVEL:-debug}" >> "$GITHUB_ENV"
+          echo "STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION=${STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION:-false}" >> "$GITHUB_ENV"
 
       - name: Check formatting
         run: pnpm format
@@ -120,6 +122,7 @@ jobs:
             --config wrangler.jsonc \
             --var "SUPABASE_URL:${SUPABASE_URL}" \
             --var "LOG_LEVEL:${LOG_LEVEL}" \
+            --var "STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION:${STRAVA_WEBHOOK_DISABLE_SIGNATURE_VERIFICATION}" \
             --var "STRAVA_CLIENT_ID:${STRAVA_CLIENT_ID}" \
             --var "STRAVA_REDIRECT_URI:${STRAVA_REDIRECT_URI}" \
             --var "STRAVA_WEBHOOK_CALLBACK_URL:${STRAVA_WEBHOOK_CALLBACK_URL}" \
