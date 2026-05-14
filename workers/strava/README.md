@@ -83,10 +83,17 @@ Optional:
 Run from repo root:
 
 ```bash
+export STRAVA_CLIENT_ID="<client-id>"
+export STRAVA_CLIENT_SECRET="<client-secret>"
+export STRAVA_WEBHOOK_CALLBACK_URL="https://api.getbricked.fit/strava/webhook"
+export STRAVA_WEBHOOK_VERIFY_TOKEN="<verify-token>"
+
 pnpm --filter @brick/strava-worker webhook:view
 pnpm --filter @brick/strava-worker webhook:create
 pnpm --filter @brick/strava-worker webhook:delete -- <subscription-id>
 ```
+
+The script does not auto-load `workers/strava/.dev.vars`; required values must be exported in your shell.
 
 Script env requirements:
 

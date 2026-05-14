@@ -253,6 +253,11 @@ Required variables:
 Run from repo root:
 
 ```bash
+export STRAVA_CLIENT_ID="<prod-client-id>"
+export STRAVA_CLIENT_SECRET="<prod-client-secret>"
+export STRAVA_WEBHOOK_CALLBACK_URL="https://api.getbricked.fit/strava/webhook"
+export STRAVA_WEBHOOK_VERIFY_TOKEN="<prod-verify-token>"
+
 pnpm --filter @brick/strava-worker webhook:view
 pnpm --filter @brick/strava-worker webhook:create
 pnpm --filter @brick/strava-worker webhook:delete -- <subscription-id>
@@ -260,6 +265,7 @@ pnpm --filter @brick/strava-worker webhook:delete -- <subscription-id>
 
 Notes:
 
+- The subscription script requires env vars to be set in your shell; it does not load `workers/strava/.dev.vars`.
 - Strava allows one webhook subscription per app.
 - `webhook:create` checks for an existing subscription first.
 - Do not create subscriptions in deploy automation.
