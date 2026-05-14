@@ -288,9 +288,10 @@ export async function syncUserActivities(
   } catch (error) {
     const statusCode = error instanceof SyncError ? error.statusCode : 500;
     const safeErrorMessage = error instanceof SyncError ? error.message : 'Sync failed.';
+    const errorDetails = buildErrorDetails(error);
     log.error(
       {
-        err: error,
+        ...errorDetails,
         statusCode,
         safeErrorMessage,
         syncRunId: activeSyncRun?.id ?? null,
@@ -540,5 +541,41 @@ class SyncError extends Error {
     readonly statusCode: number
   ) {
     super(message);
+  }
+}
+
+function buildErrorDetails(error: unknown): {
+  errorName: string;
+  errorMessage: string;
+  errorStack: string | null;
+} {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack ? error.stack.slice(0, 4_000) : null
+    };
+  }
+
+  if (typeof error === 'string') {
+    return {
+      errorName: 'NonErrorString',
+      errorMessage: error,
+      errorStack: null
+    };
+  }
+
+  try {
+    return {
+      errorName: 'NonErrorValue',
+      errorMessage: JSON.stringify(error),
+      errorStack: null
+    };
+  } catch {
+    return {
+      errorName: 'NonErrorValue',
+      errorMessage: String(error),
+      errorStack: null
+    };
   }
 }
