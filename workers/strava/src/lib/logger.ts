@@ -53,6 +53,13 @@ function getLogger(env: Pick<Env, 'LOG_LEVEL'>): Logger {
       level,
       base: undefined,
       timestamp: pino.stdTimeFunctions.isoTime,
+      formatters: {
+        level(label) {
+          return {
+            level: mapLevelForCloudflare(label)
+          };
+        }
+      },
       browser: {
         asObject: true
       }
@@ -99,4 +106,20 @@ function normalizeLogLevel(value: unknown): LevelWithSilent | null {
   }
 
   return null;
+}
+
+function mapLevelForCloudflare(level: string): 'debug' | 'info' | 'warn' | 'error' {
+  if (level === 'trace' || level === 'debug') {
+    return 'debug';
+  }
+
+  if (level === 'info') {
+    return 'info';
+  }
+
+  if (level === 'warn') {
+    return 'warn';
+  }
+
+  return 'error';
 }
