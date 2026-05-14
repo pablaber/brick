@@ -126,9 +126,11 @@ export async function processStravaWebhookEvent({
     ownerId: event.owner_id,
     userId
   });
+  log.debug('Started webhook event processing.');
 
   try {
     if (isAthleteDeauthorizationEvent(event)) {
+      log.debug('Handling athlete deauthorization webhook event.');
       const connection = await findConnectionForDeauthorization({
         supabase,
         ownerId: event.owner_id,
@@ -136,6 +138,7 @@ export async function processStravaWebhookEvent({
       });
 
       if (!connection) {
+        log.debug('No connection found for deauthorization event. Marking ignored.');
         await markWebhookEventIgnored({
           supabase,
           eventId,
@@ -159,12 +162,15 @@ export async function processStravaWebhookEvent({
       if (deauthError) {
         throw new Error('Unable to persist deauthorization state.');
       }
+      log.info({ userId: connection.user_id }, 'Persisted athlete deauthorization state.');
 
       await markWebhookEventProcessed({ supabase, eventId, nowIso: now.toISOString() });
+      log.info('Marked athlete deauthorization event as processed.');
       return;
     }
 
     if (!userId) {
+      log.debug('Webhook event has no resolved user. Marking ignored.');
       await markWebhookEventIgnored({
         supabase,
         eventId,
@@ -176,6 +182,7 @@ export async function processStravaWebhookEvent({
 
     const connection = await getConnectionForProcessing({ supabase, userId });
     if (!connection) {
+      log.debug('No active connection found for user. Marking ignored.');
       await markWebhookEventIgnored({
         supabase,
         eventId,
@@ -186,6 +193,7 @@ export async function processStravaWebhookEvent({
     }
 
     if (event.object_type !== 'activity') {
+      log.debug({ objectType: event.object_type }, 'Unsupported object type. Marking ignored.');
       await markWebhookEventIgnored({
         supabase,
         eventId,
@@ -196,12 +204,14 @@ export async function processStravaWebhookEvent({
     }
 
     if (event.aspect_type === 'delete') {
+      log.debug('Handling delete activity webhook event.');
       await deleteLocalActivity({
         supabase,
         userId: connection.user_id,
         objectId: event.object_id
       });
       await markWebhookEventProcessed({ supabase, eventId, nowIso: now.toISOString() });
+      log.info('Deleted local activity and marked event processed.');
       return;
     }
 
@@ -211,6 +221,7 @@ export async function processStravaWebhookEvent({
       !connection.refresh_token ||
       !connection.expires_at
     ) {
+      log.debug('Connection is missing token data or is deauthorized. Marking ignored.');
       await markWebhookEventIgnored({
         supabase,
         eventId,
@@ -222,12 +233,14 @@ export async function processStravaWebhookEvent({
 
     let activeConnection = connection;
     if (isTokenExpiredOrExpiringSoon(connection.expires_at)) {
+      log.debug('Connection token is expired/expiring soon. Refreshing token.');
       activeConnection = await refreshStravaToken({
         env,
         supabase,
         connection,
         logger: log
       });
+      log.debug('Token refresh completed.');
     }
 
     const accessToken = activeConnection.access_token;
@@ -236,6 +249,7 @@ export async function processStravaWebhookEvent({
     }
 
     try {
+      log.debug('Fetching Strava activity by id for webhook event.');
       const activity = await fetchStravaActivityById({
         accessToken,
         activityId: event.object_id,
@@ -250,18 +264,29 @@ export async function processStravaWebhookEvent({
       if (upsertError) {
         throw new Error('Unable to store Strava activity from webhook.');
       }
+      log.info({ stravaActivityId: event.object_id }, 'Upserted Strava activity from webhook.');
 
       await markWebhookEventProcessed({ supabase, eventId, nowIso: now.toISOString() });
+      log.info('Marked webhook event as processed.');
       return;
     } catch (error) {
       if (error instanceof StravaApiStatusError) {
+        log.warn(
+          {
+            statusCode: error.statusCode,
+            message: error.message
+          },
+          'Strava API status error while processing webhook event.'
+        );
         if (event.aspect_type === 'update' && error.statusCode === 404) {
+          log.debug('Activity update returned 404. Deleting local activity and marking processed.');
           await deleteLocalActivity({
             supabase,
             userId: activeConnection.user_id,
             objectId: event.object_id
           });
           await markWebhookEventProcessed({ supabase, eventId, nowIso: now.toISOString() });
+          log.info('Deleted local activity after 404 and marked processed.');
           return;
         }
 
@@ -271,12 +296,17 @@ export async function processStravaWebhookEvent({
             !hasActivityReadAllScope(activeConnection.scope);
 
           if (shouldDeleteForPrivacy) {
+            log.debug(
+              { shouldDeleteForPrivacy },
+              'Activity update returned 403 with privacy signal. Deleting local activity.'
+            );
             await deleteLocalActivity({
               supabase,
               userId: activeConnection.user_id,
               objectId: event.object_id
             });
             await markWebhookEventProcessed({ supabase, eventId, nowIso: now.toISOString() });
+            log.info('Deleted local activity after 403 privacy signal and marked processed.');
             return;
           }
         }

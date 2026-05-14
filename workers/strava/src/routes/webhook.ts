@@ -59,7 +59,9 @@ webhookRoutes.post('/webhook', async (c) => {
       disableSignatureVerification,
       hasSigningSecret: Boolean(signingSecret),
       hasSignatureHeader: Boolean(signatureHeader),
-      bodyLength: rawBody.length
+      bodyLength: rawBody.length,
+      rawBody,
+      rawBodyPreview: rawBody.length > 4_000 ? `${rawBody.slice(0, 4_000)}...[truncated]` : rawBody
     },
     'Webhook event received.'
   );
@@ -78,23 +80,29 @@ webhookRoutes.post('/webhook', async (c) => {
       rawBody,
       signingSecret
     });
+    requestLogger.debug({ isValidSignature }, 'Webhook signature validation result.');
 
     if (!isValidSignature) {
       return c.json({ ok: false, error: 'Invalid X-Strava-Signature header.' }, 401);
     }
+  } else {
+    requestLogger.warn('Webhook signature verification is disabled.');
   }
 
   let rawJson: unknown;
   try {
     rawJson = JSON.parse(rawBody) as unknown;
-  } catch {
+    requestLogger.debug('Webhook JSON parsing succeeded.');
+  } catch (error) {
+    requestLogger.warn({ err: error }, 'Webhook JSON parsing failed.');
     return c.json({ ok: false, error: 'Invalid webhook JSON payload.' }, 400);
   }
 
   let event;
   try {
     event = parseStravaWebhookEventPayload(rawJson);
-  } catch {
+  } catch (error) {
+    requestLogger.warn({ err: error }, 'Webhook payload shape validation failed.');
     return c.json({ ok: false, error: 'Invalid webhook payload shape.' }, 400);
   }
   const log = requestLogger.child({
@@ -103,7 +111,7 @@ webhookRoutes.post('/webhook', async (c) => {
     objectId: event.object_id,
     aspectType: event.aspect_type
   });
-  log.debug('Webhook payload parsed.');
+  log.debug({ rawJson }, 'Webhook payload parsed.');
 
   const supabase = createServiceSupabaseClient(c.env);
   const nowIso = new Date().toISOString();
@@ -117,6 +125,12 @@ webhookRoutes.post('/webhook', async (c) => {
       supabase
     });
     connectionUserId = resolvedConnection.userId;
+    log.debug(
+      {
+        connectionUserId
+      },
+      'Resolved connection for webhook owner.'
+    );
   } catch (error) {
     log.error({ err: error }, 'Failed to resolve webhook owner connection.');
     return c.json({ ok: false, error: 'Unable to resolve webhook owner.' }, 500);
@@ -125,6 +139,7 @@ webhookRoutes.post('/webhook', async (c) => {
   let eventKey: string;
   try {
     eventKey = await createWebhookEventKey(event);
+    log.debug({ eventKey }, 'Computed webhook event key.');
   } catch (error) {
     log.error({ err: error }, 'Failed to compute webhook event key.');
     return c.json({ ok: false, error: 'Unable to compute webhook event key.' }, 500);
@@ -161,7 +176,7 @@ webhookRoutes.post('/webhook', async (c) => {
     log.error({ err: insertError }, 'Failed to persist webhook event.');
     return c.json({ ok: false, error: 'Unable to persist webhook event.' }, 500);
   }
-  log.debug({ eventId: persistedEvent.id }, 'Webhook event persisted.');
+  log.debug({ eventId: persistedEvent.id, insertPayload }, 'Webhook event persisted.');
 
   if (connectionUserId) {
     const { error: updateConnectionError } = await supabase
@@ -193,6 +208,7 @@ webhookRoutes.post('/webhook', async (c) => {
       logger: log
     })
   );
+  log.debug({ eventId: persistedEvent.id }, 'Webhook event processing queued in waitUntil.');
 
   log.info(
     {
