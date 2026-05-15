@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { cubicOut } from 'svelte/easing';
 	import { DASHBOARD_COMPACT_CHART_HEIGHT_PX } from '$lib/components/dashboard/constants';
 	import { formatMinutes, formatWeek } from '$lib/dashboard/formatters';
@@ -251,9 +252,7 @@
 									{#each day.activities as activity (activity.id)}
 										{#if activity.stravaActivityId}
 											<a
-												href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
-												target="_blank"
-												rel="noopener noreferrer"
+												href={resolve(`/activity/${activity.id}`)}
 												class="activity-segment activity-segment-link has-tooltip"
 												style={`flex-grow: ${Math.max(activity.minutes, 1)}`}
 											>

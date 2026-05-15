@@ -2,11 +2,11 @@
 	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
 	import { onMount, tick, untrack } from 'svelte';
-	import { slide } from 'svelte/transition';
+	import { fade, fly, slide } from 'svelte/transition';
 
 	let { data, form } = $props();
 	type SettingsFormFeedback = {
-		scope: 'profile' | 'colors' | 'goals';
+		scope: 'profile' | 'colors' | 'goals' | 'deletion';
 		error?: string;
 		success?: string;
 		goalType?: string;
@@ -41,6 +41,10 @@
 
 	let goalSaving = $state<Record<string, 'save' | 'deactivate' | false>>({});
 	let goalSaved = $state<Record<string, boolean>>({});
+	let dangerZoneOpen = $state(false);
+	let deletionModalOpen = $state(false);
+	let deletionSubmitting = $state(false);
+	const pendingDeletionRequest = $derived(data.pendingDeletionRequest);
 
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastDismissing = $state(false);
@@ -63,6 +67,12 @@
 			toast = null;
 			toastDismissing = false;
 		}, 400);
+	}
+
+	function closeDeletionModal() {
+		if (!deletionSubmitting) {
+			deletionModalOpen = false;
+		}
 	}
 
 	onMount(() => {
@@ -91,6 +101,8 @@
 		connected: 'Strava connected successfully.',
 		denied: 'Strava authorization was denied.',
 		invalid_state: 'Invalid or expired Strava authorization state. Please try again.',
+		already_connected:
+			'That Strava account is already connected to another Brick user. Disconnect it there or contact support.',
 		error: 'Unable to connect Strava right now. Please try again.'
 	};
 
@@ -646,7 +658,123 @@
 		</div>
 		{/if}
 	</div>
+
+	<div class="card card-sectioned danger-zone-card">
+		<button class="card-heading card-heading-toggle danger-zone-heading" onclick={() => dangerZoneOpen = !dangerZoneOpen}>
+			<h2>Danger Zone</h2>
+			<span class="chevron" class:chevron-open={dangerZoneOpen}>&#9656;</span>
+		</button>
+		{#if dangerZoneOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
+		<div class="danger-zone-body">
+			<p class="metric-caption">
+				Request account deletion to remove your login and all app-owned data. An admin must fulfill this
+				request.
+			</p>
+			{#if pendingDeletionRequest}
+				<p class="pending-request-note">
+					Deletion requested
+					{#if formatDate(pendingDeletionRequest.requested_at)}
+						on {formatDate(pendingDeletionRequest.requested_at)?.date} at
+						{formatDate(pendingDeletionRequest.requested_at)?.time}.
+					{:else}
+						on {pendingDeletionRequest.requested_at}.
+					{/if}
+				</p>
+				<button type="button" class="destructive-button" disabled>Deletion Request Pending</button>
+			{:else}
+				<button type="button" class="destructive-button" onclick={() => (deletionModalOpen = true)}>
+					Request Account Deletion
+				</button>
+			{/if}
+		</div>
+		</div>
+		{/if}
+	</div>
 </section>
+
+{#if deletionModalOpen}
+	<div
+		class="modal-overlay"
+		role="button"
+		tabindex="0"
+		aria-label="Close account deletion dialog"
+		transition:fade={{ duration: 150 }}
+		onclick={(event) => {
+			if (event.target === event.currentTarget) {
+				closeDeletionModal();
+			}
+		}}
+		onkeydown={(event) => {
+			if (
+				event.target === event.currentTarget &&
+				(event.key === 'Escape' || event.key === 'Enter' || event.key === ' ')
+			) {
+				event.preventDefault();
+				closeDeletionModal();
+			}
+		}}
+	>
+		<div
+			class="modal-card"
+			role="dialog"
+			tabindex="-1"
+			aria-modal="true"
+			aria-labelledby="deletion-modal-title"
+			aria-describedby="deletion-modal-description"
+			transition:fly={{ y: 16, duration: 200 }}
+		>
+			<h2 id="deletion-modal-title">Request Account Deletion</h2>
+			<p id="deletion-modal-description" class="metric-caption">
+				Fulfilling this request will permanently remove:
+			</p>
+			<ul class="deletion-impact-list">
+				<li>Strava connection and stored token data.</li>
+				<li>Synced Strava activities and raw activity payloads.</li>
+				<li>Profile, settings, goals, sync history, and preferences.</li>
+				<li>Your Brick login account.</li>
+				<li>Only a minimal deletion-request audit row is retained.</li>
+			</ul>
+			{#if settingsForm?.scope === 'deletion' && settingsForm.error}
+				<p class="form-error">{settingsForm.error}</p>
+			{/if}
+			<form
+				method="POST"
+				action="?/requestAccountDeletion"
+				class="modal-actions"
+				use:enhance={() => {
+					deletionSubmitting = true;
+					return async ({ result, update }) => {
+						await update({ reset: false });
+						deletionSubmitting = false;
+
+						const settingsFeedback = (result as { data?: { settingsForm?: SettingsFormFeedback } }).data
+							?.settingsForm;
+
+						if (result.type === 'success') {
+							deletionModalOpen = false;
+							showToast(
+								settingsFeedback?.success ?? 'Account deletion requested. An admin will process this request.',
+								'success'
+							);
+						} else if (result.type === 'failure') {
+							showToast(settingsFeedback?.error ?? 'Unable to request account deletion right now.', 'error');
+						} else if (result.type === 'error') {
+							showToast('Unable to request account deletion right now.', 'error');
+						}
+					};
+				}}
+			>
+				<button type="button" class="secondary-button" onclick={closeDeletionModal} disabled={deletionSubmitting}>
+					Cancel
+				</button>
+				<button type="submit" class="destructive-button" disabled={deletionSubmitting}>
+					{deletionSubmitting ? 'Submitting…' : 'Confirm Request'}
+				</button>
+			</form>
+		</div>
+	</div>
+{/if}
 
 {#if toast}
 	<div class="toast-container" class:toast-dismissing={toastDismissing}>
@@ -1044,6 +1172,76 @@
 		cursor: not-allowed;
 	}
 
+	.danger-zone-card {
+		border-color: #f0c1c1;
+	}
+
+	.danger-zone-heading {
+		background: #fff8f8;
+	}
+
+	.danger-zone-heading:hover {
+		background: #fff0f0;
+	}
+
+	.danger-zone-heading h2 {
+		color: #a73131;
+	}
+
+	.danger-zone-body {
+		display: grid;
+		gap: 1rem;
+		padding: 1rem;
+	}
+
+	.danger-zone-body .metric-caption {
+		margin: 0;
+	}
+
+	.pending-request-note {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #934040;
+	}
+
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 90;
+		display: grid;
+		place-items: center;
+		background: rgba(16, 37, 63, 0.5);
+		padding: 1rem;
+	}
+
+	.modal-card {
+		width: min(100%, 38rem);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: 0.95rem;
+		padding: 1rem;
+		box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.deletion-impact-list {
+		margin: 0;
+		padding-left: 1.25rem;
+		display: grid;
+		gap: 0.4rem;
+		font-size: 0.92rem;
+		color: var(--text-muted);
+		list-style: disc;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
 	.sync-loading {
 		margin: 0;
 		font-size: 0.9rem;
@@ -1192,6 +1390,16 @@
 		to {
 			opacity: 0;
 			transform: translateY(1rem);
+		}
+	}
+
+	@media (max-width: 640px) {
+		.modal-actions {
+			justify-content: stretch;
+		}
+
+		.modal-actions button {
+			flex: 1;
 		}
 	}
 </style>

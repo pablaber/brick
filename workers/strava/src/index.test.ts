@@ -12,7 +12,11 @@ const mockState = vi.hoisted(() => ({
   } | null,
   selectError: null as { message: string } | null,
   insertError: null as { message: string } | null,
-  upsertError: null as { message: string } | null,
+  existingActiveConnectionRows: [] as Array<{ user_id: string }>,
+  connectionSelectError: null as { message: string } | null,
+  refreshedExistingConnectionUserIds: [] as string[],
+  connectionUpdateError: null as { message: string } | null,
+  upsertError: null as { message: string; code?: string } | null,
   updateError: null as { message: string } | null
 }));
 
@@ -41,6 +45,24 @@ vi.mock('./lib/supabase.js', () => {
 
         if (table === 'strava_connections') {
           return {
+            select: () => ({
+              eq: () => ({
+                is: () => ({
+                  neq: () => ({
+                    limit: async () => ({
+                      data: mockState.existingActiveConnectionRows,
+                      error: mockState.connectionSelectError
+                    })
+                  })
+                })
+              })
+            }),
+            update: () => ({
+              eq: async (_column: string, userId: string) => {
+                mockState.refreshedExistingConnectionUserIds.push(userId);
+                return { error: mockState.connectionUpdateError };
+              }
+            }),
             upsert: async () => ({ error: mockState.upsertError })
           };
         }
@@ -93,6 +115,10 @@ describe('strava worker routes', () => {
     mockState.oauthStateRow = null;
     mockState.selectError = null;
     mockState.insertError = null;
+    mockState.existingActiveConnectionRows = [];
+    mockState.connectionSelectError = null;
+    mockState.refreshedExistingConnectionUserIds = [];
+    mockState.connectionUpdateError = null;
     mockState.upsertError = null;
     mockState.updateError = null;
   });
@@ -208,6 +234,58 @@ describe('strava worker routes', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('http://localhost:5173/settings?strava=denied');
+  });
+
+  it('GET /strava/callback rejects Strava accounts connected to another user', async () => {
+    mockState.oauthStateRow = {
+      id: 'cd86db74-c84d-4402-8c90-6198d250a84f',
+      user_id: '2b4698be-0ebd-4a4a-a6f1-3c65ce9a4510',
+      provider: 'strava',
+      state: 'valid-state',
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      used_at: null
+    };
+    mockState.existingActiveConnectionRows = [{ user_id: 'other-user' }];
+
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/callback?state=valid-state&code=test-code'),
+      env,
+      {} as ExecutionContext
+    );
+
+    expect(response.status).toBe(302);
+    expect(mockState.refreshedExistingConnectionUserIds).toEqual(['other-user']);
+    expect(response.headers.get('location')).toBe(
+      'http://localhost:5173/settings?strava=already_connected'
+    );
+  });
+
+  it('GET /strava/callback maps active Strava athlete uniqueness conflicts to already connected', async () => {
+    mockState.oauthStateRow = {
+      id: 'cd86db74-c84d-4402-8c90-6198d250a84f',
+      user_id: '2b4698be-0ebd-4a4a-a6f1-3c65ce9a4510',
+      provider: 'strava',
+      state: 'valid-state',
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      used_at: null
+    };
+    mockState.upsertError = {
+      message: 'duplicate key value violates unique constraint',
+      code: '23505'
+    };
+    mockState.existingActiveConnectionRows = [{ user_id: 'other-user' }];
+
+    const response = await worker.fetch(
+      new Request('http://localhost/strava/callback?state=valid-state&code=test-code'),
+      env,
+      {} as ExecutionContext
+    );
+
+    expect(response.status).toBe(302);
+    expect(mockState.refreshedExistingConnectionUserIds).toEqual(['other-user']);
+    expect(response.headers.get('location')).toBe(
+      'http://localhost:5173/settings?strava=already_connected'
+    );
   });
 
   it('returns a JSON 404 for unknown routes', async () => {

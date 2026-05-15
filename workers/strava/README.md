@@ -54,7 +54,7 @@ Processing behavior:
 
 - `activity:create` / `activity:update`: fetches only `GET /api/v3/activities/{id}` and upserts one row.
 - `activity:delete`: deletes local `activities` row by `(user_id, strava_activity_id)` only.
-- `athlete` deauthorization (`updates.authorized === 'false'`): keeps `strava_connections` row, nulls token fields, sets `deauthorized_at`.
+- `athlete` deauthorization (`updates.authorized === 'false'`): deletes locally stored Strava activity and webhook-event data, keeps the `strava_connections` row, nulls token fields, and sets `deauthorized_at`.
 - Unknown owner events are persisted and marked `ignored`.
 
 ## Environment Variables

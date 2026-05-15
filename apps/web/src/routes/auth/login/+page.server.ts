@@ -39,9 +39,17 @@ export const actions: Actions = {
     const formData = await request.formData();
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+    const termsAccepted = formData.get('termsAccepted') === 'on';
 
     if (!email || !password) {
       return fail(400, { error: 'Email and password are required.', email });
+    }
+
+    if (!termsAccepted) {
+      return fail(400, {
+        error: 'You must agree to the Terms of Service and Privacy Policy.',
+        email
+      });
     }
 
     const allowed = await isEmailAllowed(email);

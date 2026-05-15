@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { base, resolve } from '$app/paths';
 	import PoweredByStrava from '$lib/components/PoweredByStrava.svelte';
 	import TrainingDurationThisWeekCard from '$lib/components/dashboard/TrainingDurationThisWeekCard.svelte';
 	import YearlyDistanceGoalCard from '$lib/components/dashboard/YearlyDistanceGoalCard.svelte';
@@ -331,9 +331,7 @@
 								<strong class="activity-name">
 									{#if activity.stravaActivityId}
 										<a
-											href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
-											target="_blank"
-											rel="noopener noreferrer"
+											href={resolve(`/activity/${activity.id}`)}
 											class="activity-link"
 										>
 											{activity.name ?? 'Untitled'}
@@ -363,9 +361,20 @@
 				</ul>
 			</article>
 		</div>
-		<div class="powered-by-footer">
-			<PoweredByStrava />
-		</div>
+		<footer class="dashboard-footer">
+			<div class="footer-brand">
+				<img class="footer-logo" src="{base}/logos/brick-64.png" alt="Brick logo" />
+				<span class="footer-label">Brick</span>
+			</div>
+			<nav class="footer-links" aria-label="Footer">
+				<a href={resolve('/privacy')}>Privacy Policy</a>
+				<a href={resolve('/terms')}>Terms</a>
+				<a href={resolve('/support')}>Support</a>
+			</nav>
+			<div class="footer-powered-by">
+				<PoweredByStrava />
+			</div>
+		</footer>
 	{/if}
 </section>
 
@@ -771,9 +780,50 @@
 		background: var(--color-other);
 	}
 
-	.powered-by-footer {
+	.dashboard-footer {
 		display: flex;
-		justify-content: center;
-		padding: 0.5rem 0 0.25rem;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 2rem 0 1rem;
+		margin-top: 1rem;
+		border-top: 1px solid var(--line);
+	}
+
+	.footer-brand {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.footer-logo {
+		height: 28px;
+		width: 28px;
+	}
+
+	.footer-label {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+
+	.footer-links {
+		display: flex;
+		gap: 1rem;
+	}
+
+	.footer-links a {
+		font-size: 0.82rem;
+		color: var(--text-muted);
+		text-decoration: none;
+	}
+
+	.footer-links a:hover {
+		color: var(--brand);
+		text-decoration: underline;
+	}
+
+	.footer-powered-by {
+		opacity: 0.7;
 	}
 </style>

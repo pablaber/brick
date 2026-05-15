@@ -108,6 +108,47 @@ stravaRoutes.get('/callback', async (c) => {
     return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
   }
 
+  const { data: existingActiveConnections, error: existingConnectionError } = await supabase
+    .from('strava_connections')
+    .select('user_id')
+    .eq('strava_athlete_id', tokenResponse.athlete.id)
+    .is('deauthorized_at', null)
+    .neq('user_id', oauthState.user_id)
+    .limit(1);
+
+  if (existingConnectionError) {
+    console.error('Failed to check existing Strava connection.', existingConnectionError);
+    return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
+  }
+
+  if ((existingActiveConnections ?? []).length > 0) {
+    const existingConnection = existingActiveConnections?.[0];
+    if (!existingConnection) {
+      return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
+    }
+
+    const existingConnectionUpdated = await updateExistingConnectionTokens({
+      supabase,
+      userId: existingConnection.user_id,
+      tokenResponse
+    });
+
+    if (!existingConnectionUpdated) {
+      return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
+    }
+
+    const markedUsed = await markOAuthStateUsed({
+      supabase,
+      oauthStateId: oauthState.id
+    });
+
+    if (!markedUsed) {
+      return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
+    }
+
+    return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'already_connected'), 302);
+  }
+
   const { error: upsertError } = await supabase.from('strava_connections').upsert(
     {
       user_id: oauthState.user_id,
@@ -124,16 +165,37 @@ stravaRoutes.get('/callback', async (c) => {
 
   if (upsertError) {
     console.error('Failed to upsert strava connection.', upsertError);
+    if (isUniqueConstraintViolation(upsertError)) {
+      const existingConnectionUpdated = await refreshExistingConnectionForAthlete({
+        supabase,
+        athleteId: tokenResponse.athlete.id,
+        currentUserId: oauthState.user_id,
+        tokenResponse
+      });
+
+      if (!existingConnectionUpdated) {
+        return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
+      }
+
+      const markedUsed = await markOAuthStateUsed({
+        supabase,
+        oauthStateId: oauthState.id
+      });
+
+      if (!markedUsed) {
+        return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
+      }
+
+      return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'already_connected'), 302);
+    }
     return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
   }
 
-  const { error: markUsedError } = await supabase
-    .from('oauth_states')
-    .update({ used_at: new Date().toISOString() })
-    .eq('id', oauthState.id);
-
-  if (markUsedError) {
-    console.error('Failed to mark oauth state as used.', markUsedError);
+  const markedUsed = await markOAuthStateUsed({
+    supabase,
+    oauthStateId: oauthState.id
+  });
+  if (!markedUsed) {
     return c.redirect(buildSettingsRedirectUrl(c.env.APP_URL, 'error'), 302);
   }
 
@@ -146,6 +208,99 @@ function buildSettingsRedirectUrl(appUrl: string, status: string) {
     url.searchParams.set('strava', status);
   }
   return url.toString();
+}
+
+async function refreshExistingConnectionForAthlete({
+  supabase,
+  athleteId,
+  currentUserId,
+  tokenResponse
+}: {
+  supabase: ReturnType<typeof createServiceSupabaseClient>;
+  athleteId: number;
+  currentUserId: string;
+  tokenResponse: Awaited<ReturnType<typeof exchangeStravaCodeForToken>>;
+}) {
+  const { data: existingActiveConnections, error } = await supabase
+    .from('strava_connections')
+    .select('user_id')
+    .eq('strava_athlete_id', athleteId)
+    .is('deauthorized_at', null)
+    .neq('user_id', currentUserId)
+    .limit(1);
+
+  if (error) {
+    console.error('Failed to reload existing Strava connection after uniqueness conflict.', error);
+    return false;
+  }
+
+  const existingConnection = existingActiveConnections?.[0];
+  if (!existingConnection) {
+    return false;
+  }
+
+  return updateExistingConnectionTokens({
+    supabase,
+    userId: existingConnection.user_id,
+    tokenResponse
+  });
+}
+
+async function updateExistingConnectionTokens({
+  supabase,
+  userId,
+  tokenResponse
+}: {
+  supabase: ReturnType<typeof createServiceSupabaseClient>;
+  userId: string;
+  tokenResponse: Awaited<ReturnType<typeof exchangeStravaCodeForToken>>;
+}) {
+  const { error } = await supabase
+    .from('strava_connections')
+    .update({
+      access_token: tokenResponse.access_token,
+      refresh_token: tokenResponse.refresh_token,
+      expires_at: new Date(tokenResponse.expires_at * 1000).toISOString(),
+      scope: tokenResponse.scope ?? STRAVA_SCOPE,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Failed to refresh existing Strava connection tokens.', error);
+    return false;
+  }
+
+  return true;
+}
+
+async function markOAuthStateUsed({
+  supabase,
+  oauthStateId
+}: {
+  supabase: ReturnType<typeof createServiceSupabaseClient>;
+  oauthStateId: string;
+}) {
+  const { error } = await supabase
+    .from('oauth_states')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', oauthStateId);
+
+  if (error) {
+    console.error('Failed to mark oauth state as used.', error);
+    return false;
+  }
+
+  return true;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in error ? (error as { code?: unknown }).code : null;
+  return code === '23505';
 }
 
 function createOAuthState() {
