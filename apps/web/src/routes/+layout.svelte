@@ -11,6 +11,9 @@
 		if (routeId === '/dashboard') return 'Brick | Dashboard';
 		if (routeId === '/auth/login') return 'Brick | Login';
 		if (routeId === '/settings') return 'Brick | Settings';
+		if (routeId === '/privacy') return 'Brick | Privacy Policy';
+		if (routeId === '/support') return 'Brick | Support';
+		if (routeId === '/terms') return 'Brick | Terms of Service';
 		return 'Brick';
 	});
 
@@ -44,7 +47,7 @@
 						class={`nav-link ${isActive('/settings') ? 'active' : ''}`}
 						href={resolve('/settings')}>Settings</a
 					>
-	<form method="POST" action={resolve('/auth/logout')} style="display:contents">
+					<form method="POST" action={resolve('/auth/logout')} style="display:contents">
 						<button class="nav-link nav-button" type="submit">Log out</button>
 					</form>
 				{:else}

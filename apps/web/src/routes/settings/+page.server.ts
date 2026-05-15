@@ -65,6 +65,13 @@ export const load: PageServerLoad = async (event) => {
     .limit(1)
     .maybeSingle();
 
+  const { data: pendingDeletionRequest } = await event.locals.supabase
+    .from('account_deletion_requests')
+    .select('id,requested_at,status')
+    .eq('user_id', user.id)
+    .eq('status', 'requested')
+    .maybeSingle();
+
   const userSettings = await loadUserSettings(event.locals.supabase, user.id);
 
   const stravaResultQuery = event.url.searchParams.get('strava');
@@ -140,6 +147,13 @@ export const load: PageServerLoad = async (event) => {
           activities_fetched: latestScheduledSyncRun.activities_fetched,
           activities_upserted: latestScheduledSyncRun.activities_upserted,
           error: latestScheduledSyncRun.error
+        }
+      : null,
+    pendingDeletionRequest: pendingDeletionRequest
+      ? {
+          id: pendingDeletionRequest.id,
+          requested_at: pendingDeletionRequest.requested_at,
+          status: pendingDeletionRequest.status
         }
       : null
   };
@@ -284,5 +298,80 @@ export const actions: Actions = {
         }
       });
     }
+  },
+
+  requestAccountDeletion: async (event) => {
+    const user = await requireUser(event);
+
+    if (!user.email) {
+      return fail(400, {
+        settingsForm: {
+          scope: 'deletion',
+          error: 'No email is available for your account.'
+        }
+      });
+    }
+
+    const { data: existingPendingRequest, error: existingPendingRequestError } =
+      await event.locals.supabase
+        .from('account_deletion_requests')
+        .select('id,requested_at')
+        .eq('user_id', user.id)
+        .eq('status', 'requested')
+        .maybeSingle();
+
+    if (existingPendingRequestError) {
+      console.error(
+        'Unable to check existing account deletion request',
+        existingPendingRequestError
+      );
+      return fail(500, {
+        settingsForm: {
+          scope: 'deletion',
+          error: 'Unable to request account deletion right now.'
+        }
+      });
+    }
+
+    if (existingPendingRequest) {
+      return {
+        settingsForm: {
+          scope: 'deletion',
+          success: 'Account deletion request is already pending.'
+        }
+      };
+    }
+
+    const { error } = await event.locals.supabase.from('account_deletion_requests').insert({
+      user_id: user.id,
+      email: user.email,
+      status: 'requested'
+    });
+
+    if (error) {
+      if (error.code === '23505') {
+        return {
+          settingsForm: {
+            scope: 'deletion',
+            success: 'Account deletion request is already pending.'
+          }
+        };
+      }
+
+      console.error('Unable to create account deletion request', error);
+      return fail(500, {
+        settingsForm: {
+          scope: 'deletion',
+          error: 'Unable to request account deletion right now.'
+        }
+      });
+    }
+
+    return {
+      settingsForm: {
+        scope: 'deletion',
+        success: 'Account deletion requested. An admin will process this request.'
+      }
+    };
   }
 };

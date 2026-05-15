@@ -3,6 +3,39 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      account_deletion_requests: {
+        Row: {
+          created_at: string;
+          deleted_at: string | null;
+          deleted_by_admin_user_id: string | null;
+          email: string;
+          id: string;
+          requested_at: string;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          deleted_at?: string | null;
+          deleted_by_admin_user_id?: string | null;
+          email: string;
+          id?: string;
+          requested_at?: string;
+          status: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          deleted_at?: string | null;
+          deleted_by_admin_user_id?: string | null;
+          email?: string;
+          id?: string;
+          requested_at?: string;
+          status?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       activities: {
         Row: {
           average_heartrate: number | null;

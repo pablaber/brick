@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
 	let { form } = $props();
 	let loading = $state(false);
+	let acceptedTerms = $state(false);
 	let mode = $state<'login' | 'signup'>(
 		page.url.searchParams.get('mode') === 'signup' ? 'signup' : 'login'
 	);
@@ -62,7 +64,28 @@
 						minlength={6}
 					/>
 				</label>
-				<button class="primary-button" type="submit" disabled={loading}>
+				{#if mode === 'signup'}
+					<div class="consent-row">
+						<input
+							id="terms-consent"
+							name="termsAccepted"
+							type="checkbox"
+							bind:checked={acceptedTerms}
+							required
+						/>
+						<label for="terms-consent">
+							I agree to the
+							<a href={resolve('/terms')}>Terms of Service</a>
+							and
+							<a href={resolve('/privacy')}>Privacy Policy</a>.
+						</label>
+					</div>
+				{/if}
+				<button
+					class="primary-button"
+					type="submit"
+					disabled={loading || (mode === 'signup' && !acceptedTerms)}
+				>
 					{loading ? 'Loading...' : mode === 'login' ? 'Log In' : 'Sign Up'}
 				</button>
 			</form>
@@ -76,3 +99,30 @@
 		{/if}
 	</div>
 </section>
+
+<style>
+	.consent-row {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.55rem;
+		align-items: start;
+		color: var(--text-muted);
+		font-size: 0.92rem;
+		line-height: 1.45;
+	}
+
+	.consent-row input {
+		margin-top: 0.18rem;
+	}
+
+	.consent-row label {
+		display: block;
+	}
+
+	.consent-row a {
+		color: var(--brand);
+		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 0.16em;
+	}
+</style>
