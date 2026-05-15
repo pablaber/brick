@@ -324,7 +324,9 @@ a {
   align-items: center;
   justify-content: center;
   letter-spacing: 0.03em;
-  transition: opacity 150ms ease, box-shadow 150ms ease;
+  transition:
+    opacity 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .avatar-button:hover {
