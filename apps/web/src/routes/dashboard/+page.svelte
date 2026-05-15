@@ -331,9 +331,7 @@
 								<strong class="activity-name">
 									{#if activity.stravaActivityId}
 										<a
-											href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
-											target="_blank"
-											rel="noopener noreferrer"
+											href={resolve(`/activity/${activity.id}`)}
 											class="activity-link"
 										>
 											{activity.name ?? 'Untitled'}

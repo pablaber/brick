@@ -10,6 +10,7 @@
 	const pageTitle = $derived.by(() => {
 		const routeId = page.route.id;
 		if (routeId === '/dashboard') return 'Brick | Dashboard';
+		if (routeId === '/activity/[id]') return 'Brick | Activity';
 		if (routeId === '/auth/login') return 'Brick | Login';
 		if (routeId === '/settings') return 'Brick | Settings';
 		if (routeId === '/privacy') return 'Brick | Privacy Policy';
