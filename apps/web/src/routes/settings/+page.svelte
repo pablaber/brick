@@ -41,6 +41,7 @@
 
 	let goalSaving = $state<Record<string, 'save' | 'deactivate' | false>>({});
 	let goalSaved = $state<Record<string, boolean>>({});
+	let dangerZoneOpen = $state(false);
 	let deletionModalOpen = $state(false);
 	let deletionSubmitting = $state(false);
 	const pendingDeletionRequest = $derived(data.pendingDeletionRequest);
@@ -656,27 +657,36 @@
 		{/if}
 	</div>
 
-	<div class="card danger-zone-card">
-		<h2>Danger Zone</h2>
-		<p class="metric-caption">
-			Request account deletion to remove your login and all app-owned data. An admin must fulfill this
-			request.
-		</p>
-		{#if pendingDeletionRequest}
-			<p class="pending-request-note">
-				Deletion requested
-				{#if formatDate(pendingDeletionRequest.requested_at)}
-					on {formatDate(pendingDeletionRequest.requested_at)?.date} at
-					{formatDate(pendingDeletionRequest.requested_at)?.time}.
-				{:else}
-					on {pendingDeletionRequest.requested_at}.
-				{/if}
+	<div class="card card-sectioned danger-zone-card">
+		<button class="card-heading card-heading-toggle danger-zone-heading" onclick={() => dangerZoneOpen = !dangerZoneOpen}>
+			<h2>Danger Zone</h2>
+			<span class="chevron" class:chevron-open={dangerZoneOpen}>&#9656;</span>
+		</button>
+		{#if dangerZoneOpen}
+		<div class="collapsible-body" transition:slide={{ duration: 200 }}>
+		<div class="danger-zone-body">
+			<p class="metric-caption">
+				Request account deletion to remove your login and all app-owned data. An admin must fulfill this
+				request.
 			</p>
-			<button type="button" class="destructive-button" disabled>Deletion Request Pending</button>
-		{:else}
-			<button type="button" class="destructive-button" onclick={() => (deletionModalOpen = true)}>
-				Request Account Deletion
-			</button>
+			{#if pendingDeletionRequest}
+				<p class="pending-request-note">
+					Deletion requested
+					{#if formatDate(pendingDeletionRequest.requested_at)}
+						on {formatDate(pendingDeletionRequest.requested_at)?.date} at
+						{formatDate(pendingDeletionRequest.requested_at)?.time}.
+					{:else}
+						on {pendingDeletionRequest.requested_at}.
+					{/if}
+				</p>
+				<button type="button" class="destructive-button" disabled>Deletion Request Pending</button>
+			{:else}
+				<button type="button" class="destructive-button" onclick={() => (deletionModalOpen = true)}>
+					Request Account Deletion
+				</button>
+			{/if}
+		</div>
+		</div>
 		{/if}
 	</div>
 </section>
@@ -1162,11 +1172,32 @@
 
 	.danger-zone-card {
 		border-color: #f0c1c1;
+	}
+
+	.danger-zone-heading {
 		background: #fff8f8;
 	}
 
+	.danger-zone-heading:hover {
+		background: #fff0f0;
+	}
+
+	.danger-zone-heading h2 {
+		color: #a73131;
+	}
+
+	.danger-zone-body {
+		display: grid;
+		gap: 1rem;
+		padding: 1rem;
+	}
+
+	.danger-zone-body .metric-caption {
+		margin: 0;
+	}
+
 	.pending-request-note {
-		margin: 0.5rem 0 0.75rem;
+		margin: 0;
 		font-size: 0.9rem;
 		color: #934040;
 	}
@@ -1199,6 +1230,7 @@
 		gap: 0.4rem;
 		font-size: 0.92rem;
 		color: var(--text-muted);
+		list-style: disc;
 	}
 
 	.modal-actions {

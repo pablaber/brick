@@ -113,6 +113,7 @@
 					<th>Requested</th>
 					<th>Status</th>
 					<th>Deleted</th>
+					<th>Deleted By</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -122,12 +123,14 @@
 						<td><code>{request.user_id}</code></td>
 						<td>{formatTimestamp(request.requested_at)}</td>
 						<td><span class="status-chip status-deleted">deleted</span></td>
+						<td>{formatTimestamp(request.deleted_at)}</td>
 						<td>
-							{formatTimestamp(request.deleted_at)}
 							{#if request.deleted_by_admin_email}
-								by {request.deleted_by_admin_email}
+								{request.deleted_by_admin_email}
 							{:else if request.deleted_by_admin_user_id}
-								by {request.deleted_by_admin_user_id}
+								{request.deleted_by_admin_user_id}
+							{:else}
+								—
 							{/if}
 						</td>
 					</tr>

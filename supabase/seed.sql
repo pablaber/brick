@@ -105,6 +105,13 @@ BEGIN
   ON CONFLICT (email) DO UPDATE
   SET invited_by = EXCLUDED.invited_by;
 
+  INSERT INTO public.allowed_emails (email, invited_by)
+  VALUES
+    ('one@test.com', seed_user_id),
+    ('two@test.com', seed_user_id)
+  ON CONFLICT (email) DO UPDATE
+  SET invited_by = EXCLUDED.invited_by;
+
   INSERT INTO public.profiles (id, display_name, is_admin)
   VALUES (seed_user_id, 'Test Admin', true)
   ON CONFLICT (id) DO UPDATE

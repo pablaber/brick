@@ -6,9 +6,16 @@
 	let { form } = $props();
 	let loading = $state(false);
 	let acceptedTerms = $state(false);
+	let email = $state('');
 	let mode = $state<'login' | 'signup'>(
 		page.url.searchParams.get('mode') === 'signup' ? 'signup' : 'login'
 	);
+
+	$effect(() => {
+		if (form && typeof form.email === 'string') {
+			email = form.email;
+		}
+	});
 </script>
 
 <section class="page">
@@ -49,7 +56,7 @@
 						type="email"
 						name="email"
 						placeholder="you@example.com"
-						value={form?.email ?? ''}
+						bind:value={email}
 						required
 					/>
 				</label>
