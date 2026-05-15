@@ -51,6 +51,9 @@ This writes generated types to `packages/shared/src/database.types.ts`.
 - `deauthorized_at`
 - nullable `access_token`, `refresh_token`, `expires_at` for retained deauthorized rows.
 
+Only one active Brick user may be connected to a given Strava athlete at a time. Deauthorized
+connection rows are retained for account state/history and are excluded from that uniqueness rule.
+
 ## View summary
 
 - `public.weekly_activity_breakdown`: weekly totals for moving time and distance by sport.

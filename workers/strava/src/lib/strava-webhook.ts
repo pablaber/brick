@@ -47,16 +47,17 @@ export async function resolveConnectionForOwner({
   ownerId: number;
   supabase?: SupabaseClient<Database>;
 }): Promise<ResolveConnectionForOwnerResult> {
-  const { data: connection, error } = await supabase
+  const { data: connections, error } = await supabase
     .from('strava_connections')
     .select('user_id')
     .eq('strava_athlete_id', ownerId)
-    .maybeSingle();
+    .limit(1);
 
   if (error) {
     throw new Error('Unable to resolve Strava connection.');
   }
 
+  const connection = connections?.[0] ?? null;
   return {
     userId: connection?.user_id ?? null,
     connection
@@ -131,13 +132,13 @@ export async function processStravaWebhookEvent({
   try {
     if (isAthleteDeauthorizationEvent(event)) {
       log.debug('Handling athlete deauthorization webhook event.');
-      const connection = await findConnectionForDeauthorization({
+      const connections = await findConnectionsForDeauthorization({
         supabase,
         ownerId: event.owner_id,
         objectId: event.object_id
       });
 
-      if (!connection) {
+      if (connections.length === 0) {
         log.debug('No connection found for deauthorization event. Marking ignored.');
         await markWebhookEventIgnored({
           supabase,
@@ -148,27 +149,29 @@ export async function processStravaWebhookEvent({
         return;
       }
 
-      await deleteStravaDataForUser({ supabase, userId: connection.user_id });
-      log.info(
-        { userId: connection.user_id },
-        'Deleted Strava data after athlete deauthorization.'
-      );
+      for (const connection of connections) {
+        await deleteStravaDataForUser({ supabase, userId: connection.user_id });
+        log.info(
+          { userId: connection.user_id },
+          'Deleted Strava data after athlete deauthorization.'
+        );
 
-      const { error: deauthError } = await supabase
-        .from('strava_connections')
-        .update({
-          access_token: null,
-          refresh_token: null,
-          expires_at: null,
-          deauthorized_at: now.toISOString(),
-          updated_at: now.toISOString()
-        })
-        .eq('user_id', connection.user_id);
+        const { error: deauthError } = await supabase
+          .from('strava_connections')
+          .update({
+            access_token: null,
+            refresh_token: null,
+            expires_at: null,
+            deauthorized_at: now.toISOString(),
+            updated_at: now.toISOString()
+          })
+          .eq('user_id', connection.user_id);
 
-      if (deauthError) {
-        throw new Error('Unable to persist deauthorization state.');
+        if (deauthError) {
+          throw new Error('Unable to persist deauthorization state.');
+        }
+        log.info({ userId: connection.user_id }, 'Persisted athlete deauthorization state.');
       }
-      log.info({ userId: connection.user_id }, 'Persisted athlete deauthorization state.');
 
       await markWebhookEventProcessed({ supabase, eventId, nowIso: now.toISOString() });
       log.info('Marked athlete deauthorization event as processed.');
@@ -384,7 +387,7 @@ async function getConnectionForProcessing({
   return connection;
 }
 
-async function findConnectionForDeauthorization({
+async function findConnectionsForDeauthorization({
   supabase,
   ownerId,
   objectId
@@ -392,32 +395,37 @@ async function findConnectionForDeauthorization({
   supabase: SupabaseClient<Database>;
   ownerId: number;
   objectId: number;
-}): Promise<Pick<StravaConnectionRow, 'user_id'> | null> {
+}): Promise<Array<Pick<StravaConnectionRow, 'user_id'>>> {
   const { data: byOwner, error: byOwnerError } = await supabase
     .from('strava_connections')
     .select('user_id')
-    .eq('strava_athlete_id', ownerId)
-    .maybeSingle();
+    .eq('strava_athlete_id', ownerId);
 
   if (byOwnerError) {
     throw new Error('Unable to resolve deauthorization connection by owner.');
   }
 
-  if (byOwner) {
-    return byOwner;
+  const connectionsByUserId = new Map<string, Pick<StravaConnectionRow, 'user_id'>>();
+  for (const connection of byOwner ?? []) {
+    connectionsByUserId.set(connection.user_id, connection);
   }
 
-  const { data: byObject, error: byObjectError } = await supabase
-    .from('strava_connections')
-    .select('user_id')
-    .eq('strava_athlete_id', objectId)
-    .maybeSingle();
+  if (objectId !== ownerId) {
+    const { data: byObject, error: byObjectError } = await supabase
+      .from('strava_connections')
+      .select('user_id')
+      .eq('strava_athlete_id', objectId);
 
-  if (byObjectError) {
-    throw new Error('Unable to resolve deauthorization connection by object.');
+    if (byObjectError) {
+      throw new Error('Unable to resolve deauthorization connection by object.');
+    }
+
+    for (const connection of byObject ?? []) {
+      connectionsByUserId.set(connection.user_id, connection);
+    }
   }
 
-  return byObject;
+  return [...connectionsByUserId.values()];
 }
 
 async function deleteLocalActivity({

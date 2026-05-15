@@ -190,6 +190,14 @@ describe('processStravaWebhookEvent', () => {
 
   it('handles deauthorization by deleting Strava data, nulling token fields, and setting deauthorized_at', async () => {
     const state = createState();
+    const firstConnection = state.connectionsByUser['user-1'];
+    if (!firstConnection) {
+      throw new Error('Missing test connection row.');
+    }
+    state.connectionsByUser['user-2'] = {
+      ...firstConnection,
+      user_id: 'user-2'
+    };
     const supabase = createMockSupabase(state);
 
     await processStravaWebhookEvent({
@@ -216,8 +224,12 @@ describe('processStravaWebhookEvent', () => {
     expect(connection.refresh_token).toBeNull();
     expect(connection.expires_at).toBeNull();
     expect(connection.deauthorized_at).not.toBeNull();
-    expect(state.deletedActivityUsers).toContain('user-1');
-    expect(state.deletedWebhookEventUsers).toContain('user-1');
+    expect(state.connectionsByUser['user-2']?.access_token).toBeNull();
+    expect(state.connectionsByUser['user-2']?.refresh_token).toBeNull();
+    expect(state.connectionsByUser['user-2']?.expires_at).toBeNull();
+    expect(state.connectionsByUser['user-2']?.deauthorized_at).not.toBeNull();
+    expect(state.deletedActivityUsers).toEqual(expect.arrayContaining(['user-1', 'user-2']));
+    expect(state.deletedWebhookEventUsers).toEqual(expect.arrayContaining(['user-1', 'user-2']));
     expect(state.webhookUpdates['event-7']?.processing_status).toBe('processed');
   });
 });
@@ -305,22 +317,31 @@ function createMockSupabase(state: MockState): SupabaseClient<Database> {
       if (table === 'strava_connections') {
         return {
           select: () => ({
-            eq: (column: string, value: string | number) => ({
-              maybeSingle: async () => {
+            eq: (column: string, value: string | number) => {
+              const rowsForFilter = () => {
                 if (column === 'user_id') {
-                  return { data: state.connectionsByUser[value as string] ?? null, error: null };
+                  const connection = state.connectionsByUser[value as string];
+                  return connection ? [connection] : [];
                 }
 
                 if (column === 'strava_athlete_id') {
-                  const match = Object.values(state.connectionsByUser).find(
-                    (row) => row.strava_athlete_id === value
-                  );
-                  return { data: match ? { user_id: match.user_id } : null, error: null };
+                  return Object.values(state.connectionsByUser)
+                    .filter((row) => row.strava_athlete_id === value)
+                    .map((row) => ({ user_id: row.user_id }));
                 }
 
-                return { data: null, error: null };
-              }
-            })
+                return [];
+              };
+
+              return {
+                maybeSingle: async () => {
+                  const rows = rowsForFilter();
+                  return { data: rows[0] ?? null, error: null };
+                },
+                then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+                  Promise.resolve(resolve({ data: rowsForFilter(), error: null }))
+              };
+            }
           }),
           update: (values: Record<string, unknown>) => ({
             eq: async (_column: string, userId: string) => {

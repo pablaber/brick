@@ -101,6 +101,8 @@
 		connected: 'Strava connected successfully.',
 		denied: 'Strava authorization was denied.',
 		invalid_state: 'Invalid or expired Strava authorization state. Please try again.',
+		already_connected:
+			'That Strava account is already connected to another Brick user. Disconnect it there or contact support.',
 		error: 'Unable to connect Strava right now. Please try again.'
 	};
 

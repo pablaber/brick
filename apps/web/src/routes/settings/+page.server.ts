@@ -15,7 +15,13 @@ import {
 } from '$lib/server/user-settings';
 import type { Actions, PageServerLoad } from './$types';
 
-const STRAVA_RESULTS = new Set(['connected', 'denied', 'invalid_state', 'error']);
+const STRAVA_RESULTS = new Set([
+  'connected',
+  'denied',
+  'invalid_state',
+  'already_connected',
+  'error'
+]);
 const SYNC_RESULTS = new Set(['success', 'error', 'running', 'not_connected']);
 const DISPLAY_NAME_MAX_LENGTH = 80;
 
