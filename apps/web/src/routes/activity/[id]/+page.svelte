@@ -11,7 +11,6 @@
 
 	const activity = $derived(data.activity);
 	const categoryColors = $derived(data.categoryColors);
-	const stravaUrl = $derived(`https://www.strava.com/activities/${activity.strava_activity_id}`);
 
 	const RUNNING_SPORT_TYPES = new Set(['Run', 'TrailRun', 'VirtualRun']);
 	const CYCLING_SPORT_TYPES = new Set([
@@ -57,7 +56,7 @@
 			</div>
 			<a
 				class="strava-link"
-				href={stravaUrl}
+				href={`https://www.strava.com/activities/${activity.strava_activity_id}`}
 				target="_blank"
 				rel="noopener noreferrer"
 			>
