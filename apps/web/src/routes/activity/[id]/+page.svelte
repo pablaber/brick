@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import {
 		formatDate,
 		formatMetersAsMiles,
@@ -47,7 +46,6 @@
 
 <section class="page activity-detail-page">
 	<header class="page-header activity-header">
-		<a class="back-link" href={resolve('/dashboard')}>Back to Dashboard</a>
 		<div class="activity-title-row">
 			<div>
 				<p class="activity-kicker" style={`color: ${kickerColor}`}>{formatSportType(activity.sport_type)}</p>
@@ -89,7 +87,11 @@
 		<dl class="detail-list">
 			<div>
 				<dt>Sport</dt>
-				<dd>{formatSportType(activity.sport_type)}</dd>
+				<dd>
+					<span class="pill sport-pill" style={`background: ${kickerColor}`}>
+						{formatSportType(activity.sport_type)}
+					</span>
+				</dd>
 			</div>
 			<div>
 				<dt>Start Date</dt>
@@ -124,18 +126,6 @@
 
 	.activity-header {
 		gap: 0.7rem;
-	}
-
-	.back-link {
-		width: fit-content;
-		color: var(--text-muted);
-		font-size: 0.9rem;
-		font-weight: 600;
-	}
-
-	.back-link:hover {
-		color: var(--brand);
-		text-decoration: underline;
 	}
 
 	.activity-title-row {
@@ -210,6 +200,10 @@
 		margin: 0;
 		text-align: right;
 		font-weight: 700;
+	}
+
+	.sport-pill {
+		color: #fff;
 	}
 
 	@media (min-width: 720px) {
