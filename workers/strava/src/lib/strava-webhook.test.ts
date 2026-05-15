@@ -188,7 +188,7 @@ describe('processStravaWebhookEvent', () => {
     expect(state.webhookUpdates['event-6']?.processing_status).toBe('processed');
   });
 
-  it('handles deauthorization by nulling token fields and setting deauthorized_at', async () => {
+  it('handles deauthorization by deleting Strava data, nulling token fields, and setting deauthorized_at', async () => {
     const state = createState();
     const supabase = createMockSupabase(state);
 
@@ -216,6 +216,8 @@ describe('processStravaWebhookEvent', () => {
     expect(connection.refresh_token).toBeNull();
     expect(connection.expires_at).toBeNull();
     expect(connection.deauthorized_at).not.toBeNull();
+    expect(state.deletedActivityUsers).toContain('user-1');
+    expect(state.deletedWebhookEventUsers).toContain('user-1');
     expect(state.webhookUpdates['event-7']?.processing_status).toBe('processed');
   });
 });
@@ -231,6 +233,8 @@ type MockState = {
   >;
   connectionsByUser: Record<string, StravaConnection>;
   deletedActivities: Array<{ userId: string; stravaActivityId: number }>;
+  deletedActivityUsers: string[];
+  deletedWebhookEventUsers: string[];
   upsertedActivities: Array<Record<string, unknown>>;
 };
 
@@ -253,6 +257,8 @@ function createState(): MockState {
   return {
     webhookUpdates: {},
     deletedActivities: [],
+    deletedActivityUsers: [],
+    deletedWebhookEventUsers: [],
     upsertedActivities: [],
     connectionsByUser: {
       'user-1': {
@@ -278,6 +284,12 @@ function createMockSupabase(state: MockState): SupabaseClient<Database> {
     from: (table: string) => {
       if (table === 'strava_webhook_events') {
         return {
+          delete: () => ({
+            eq: async (_column: string, userId: string) => {
+              state.deletedWebhookEventUsers.push(userId);
+              return { error: null };
+            }
+          }),
           update: (values: Record<string, unknown>) => ({
             eq: async (_column: string, eventId: string) => {
               state.webhookUpdates[eventId] = {
@@ -334,6 +346,10 @@ function createMockSupabase(state: MockState): SupabaseClient<Database> {
           },
           delete: () => ({
             eq: (_column: string, userId: string) => ({
+              then: (resolve: (value: { error: null }) => unknown) => {
+                state.deletedActivityUsers.push(userId);
+                return Promise.resolve(resolve({ error: null }));
+              },
               eq: async (_column2: string, stravaActivityId: number) => {
                 state.deletedActivities.push({ userId, stravaActivityId });
                 return { error: null };

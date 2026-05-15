@@ -148,6 +148,12 @@ export async function processStravaWebhookEvent({
         return;
       }
 
+      await deleteStravaDataForUser({ supabase, userId: connection.user_id });
+      log.info(
+        { userId: connection.user_id },
+        'Deleted Strava data after athlete deauthorization.'
+      );
+
       const { error: deauthError } = await supabase
         .from('strava_connections')
         .update({
@@ -327,6 +333,32 @@ export async function processStravaWebhookEvent({
       nowIso: now.toISOString(),
       log
     });
+  }
+}
+
+async function deleteStravaDataForUser({
+  supabase,
+  userId
+}: {
+  supabase: SupabaseClient<Database>;
+  userId: string;
+}) {
+  const { error: activitiesDeleteError } = await supabase
+    .from('activities')
+    .delete()
+    .eq('user_id', userId);
+
+  if (activitiesDeleteError) {
+    throw new Error('Unable to delete Strava activities after deauthorization.');
+  }
+
+  const { error: webhookEventsDeleteError } = await supabase
+    .from('strava_webhook_events')
+    .delete()
+    .eq('user_id', userId);
+
+  if (webhookEventsDeleteError) {
+    throw new Error('Unable to delete Strava webhook events after deauthorization.');
   }
 }
 
